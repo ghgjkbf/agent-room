@@ -2,7 +2,20 @@
 
 基于 [agent-collab-system-design-doc.html](../../agent-collab-system-design-doc.html) v1.2 设计文档实现的桌面程序。定位：服务电脑上的 Agent——让本机多个 Agent（内置 LLM Agent + TRAE/ZCode 等外部 Agent）像拉群一样进同一房间交流协作。
 
-当前进度：**MVP 第 2 步完成**（双 Agent + 身份卡 + @提及定向投递 + P0 interrupt 真实抢占，均已通过桌面 GUI 端到端联调）。
+当前进度：**MVP 第 3 步完成**（MCP 接入网关：外部 Agent 进群一等公民；原第 3 步文件工作区顺延为第 4 步，见 docs 设计文档）。
+
+## 第 3 步能力清单（已完成并验收）
+
+- **外部成员管理**：前端「添加外部成员」弹窗建员发放 ROOM_TOKEN（明文仅展示一次，库内 SHA-256 哈希）；「复制令牌」重发即吊销旧令牌；成员列表内置/外部徽标 + 外部在线状态。
+- **MCP 网关**：官方 SDK MCPServer 以 streamable-http 挂载 `/gateway/mcp`（同端口 8899，无独立进程）。四件套工具：
+  - `join_room` — 报到进群，返回值内嵌房间使用约定（群规）；
+  - `poll_messages(cursor)` — 按 messages.id 游标拉增量；
+  - `send_message` — 发言/交付（chat|deliver），`client_msg_id` 幂等去重防重试刷屏；
+  - `declare_status` — 上报在线/离线/忙碌。
+- **防死循环**：外部/Agent 广播消息不触发内置 Agent 自动接话，仅显式 @ 才唤起；轮数熔断不辖外部成员。
+- **TRAE stdio 桥**：`backend/mcp_stdio.py`（stdio ↔ HTTP JSON-RPC 透传），供仅支持命令行 MCP 的客户端接入。
+- **安全**：每次工具调用 `(agent_id, token)` 双因子校验，无会话状态，吊销即时生效；失败结构化返回不抛栈。
+- **验收**：pytest 4 例（令牌校验/冒名拒绝/防死循环/幂等去重）全过；SDK ClientSession 模拟外部 Agent join→send→poll 全链路通过；Playwright（系统 Edge）GUI 走查通过；ZCode 经 `d:\ai-use\.zcode\config.json` 注册实测 join/send/poll 全通——第一个真实外部成员。
 
 ## 第 2 步能力清单（已完成并验收）
 
@@ -32,12 +45,16 @@ Tauri 2 桌面窗口（WebView 加载 127.0.0.1:8899）
 ```
 backend/          FastAPI sidecar
   main.py         启动入口
+  mcp_stdio.py    TRAE stdio 桥（stdio ↔ HTTP 透传 /gateway/mcp）
   app/main.py     路由（/api/* + /ws/{room}）+ 静态托管
   app/core/       配置、SQLite（messages 事件流）、消息协议 s4 schema v1.0
   app/rooms/bus.py    房间总线（WS 订阅 + 落库 + 扇出）
   app/agents/responder.py 内置 Agent 流式回复器 + GenerationRegistry（P0 抢占登记/取消）
+  app/mcp_gateway/server.py MCP 接入网关（四件套工具 + 双因子令牌校验）
+  tests/test_gateway.py   网关协议单测
 frontend/         单页前端（原生 HTML/CSS/JS）
 src-tauri/        Tauri 2 壳（Rust 只管窗口与 sidecar 生命周期）
+docs/             设计文档（第 3 步网关设计含 ClawSwarm 参考结论）
 ```
 
 ## API 清单
@@ -72,10 +89,11 @@ cd backend && .venv\Scripts\python.exe main.py
 
 **直启已编译壳**：`src-tauri\target\debug\app.exe`
 
-## 下一步（对应设计文档第 12 章）
+## 下一步（对应设计文档第 12 章，路线已调整）
 
 1. ~~第 1 步：桌面程序骨架 + 「1人 + 1Agent」群聊链路~~ ✅
 2. ~~第 2 步：双 Agent + 身份卡编辑器、@提及、P0 interrupt 抢占~~ ✅
-3. 第 3 步：文件工作区（MCP fs.read/fs.write + 版本乐观锁）
-4. 第 4 步：CEO 编排闭环 + 向量记忆（Chroma/Qdrant 本地实例）+ 熔断
-5. 第 5 步：MCP 网关接入 TRAE/ZCode（外部 Agent 一等公民）
+3. ~~第 3 步：MCP 接入网关（外部 Agent 进群）~~ ✅（原文件工作区顺延）
+4. 第 4 步：文件工作区（fs.read/fs.write + 版本乐观锁）+ UI 改版（参考微信布局）
+5. 第 5 步：CEO 编排闭环 + 向量记忆（Chroma/Qdrant 本地实例）+ 熔断
+6. 第 6 步：编排闭环完成后网关侧二次权限校验 + 排产单工具（claim_subtask 等）
