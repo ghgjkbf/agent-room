@@ -2,7 +2,7 @@
 
 基于 [agent-collab-system-design-doc.html](../../agent-collab-system-design-doc.html) v1.2 设计文档实现的桌面程序。定位：服务电脑上的 Agent——让本机多个 Agent（内置 LLM Agent + TRAE/ZCode 等外部 Agent）像拉群一样进同一房间交流协作。
 
-当前进度：**MVP 第 3 步完成**（MCP 接入网关：外部 Agent 进群一等公民；原第 3 步文件工作区顺延为第 4 步，见 docs 设计文档）。
+当前进度：**MVP 第 3 步完成**（MCP 接入网关：外部 Agent 进群一等公民；原第 3 步文件工作区顺延为第 4 步，见 docs 设计文档）。**第 4 步交接文档：[docs/STEP4-HANDOFF.md](docs/STEP4-HANDOFF.md)**（新会话从这里继续）。
 
 ## 第 3 步能力清单（已完成并验收）
 
