@@ -92,7 +92,7 @@ function addDeliverBubble(msg) {
     link.textContent = '📎 ' + path;
     link.title = '点击在文件面板预览';
     link.addEventListener('click', () => {
-      document.querySelector('.bp-tab[data-bp="bp-files"]').click();
+      openPanel('rp-files');
       previewFile(path);
     });
     el.appendChild(link);
@@ -121,11 +121,27 @@ function connect() {
     if (msg.tool_event) { showToolEvent(msg); return; }  // 工具调用事件，不进消息流
     handleMessage(msg);
     if (msg.type === 'system') refreshMembers(); // 熔断等系统事件后刷新轮数
+    if (msg.type !== 'system' || (msg.payload && msg.payload.text)) updateConvoLast(msg);
+    if (msg.type === 'deliver') refreshFiles();  // 交付消息同步文件面板
   };
   ws.onclose = () => { setChip('● 已断开，3 秒重连', '#b42318'); setTimeout(connect, 3000); };
   ws.onerror = () => ws.close();
 }
 function setChip(text, color) { $('ws-chip').textContent = text; $('ws-chip').style.color = color; }
+
+/* 左栏会话项的「最后一条」摘要 */
+function updateConvoLast(msg) {
+  const text = (msg.payload && msg.payload.text) || '';
+  if (!text) return;
+  let who = '你';
+  if (msg.sender.kind === 'agent') {
+    const meta = agents.find(a => a.id === msg.sender.id);
+    who = meta ? meta.name : msg.sender.id;
+  } else if (msg.sender.kind === 'system') who = '';
+  $('convo-last').textContent = (who ? who + '：' : '') + text.slice(0, 40);
+  const t = new Date();
+  $('convo-time').textContent = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+}
 
 function sendText() {
   const ta = $('draft');
@@ -154,6 +170,8 @@ function updateScopeTip(mentions) {
 /* ---------- 成员列表（含换绑 + 外部成员） ---------- */
 async function refreshMembers() {
   const res = await fetch('/api/agents'); agents = await res.json();
+  $('agent-count').textContent = agents.length;
+  $('convo-count').textContent = '· ' + agents.length + ' 成员';
   $('member-list').innerHTML = agents.map((a) => {
     const external = a.kind === 'external';
     const online = a.status === 'online';
@@ -282,19 +300,37 @@ function parseMentionsFromText(text) {
   return agents.filter(a => tail.startsWith(a.name.split(' ')[1] || a.name)).map(a => a.id);
 }
 
-/* ---------- Tab / 面板交互 ---------- */
-document.querySelectorAll('.tab').forEach((t) =>
-  t.addEventListener('click', () => {
-    document.querySelectorAll('.tab').forEach((x) => x.classList.toggle('on', x === t));
-    document.querySelectorAll('.pane').forEach((p) => p.classList.toggle('on', p.id === t.dataset.pane));
-  }));
-document.querySelectorAll('.bp-tab').forEach((t) =>
-  t.addEventListener('click', () => {
-    document.querySelectorAll('.bp-tab').forEach((x) => x.classList.toggle('on', x === t));
-    document.querySelectorAll('.bp-body').forEach((b) => b.classList.toggle('on', b.id === t.dataset.bp));
-  }));
+/* ---------- Tab / 面板交互（微信式右侧内嵌面板） ---------- */
+let panelOpen = false;
+function openPanel(tab) {
+  panelOpen = true;
+  $('right-panel').classList.remove('closed');
+  document.querySelectorAll('.rp-tab').forEach(x => x.classList.toggle('on', x.dataset.rp === tab));
+  document.querySelectorAll('.rp-body').forEach(b => b.classList.toggle('on', b.id === tab));
+  document.querySelectorAll('.icon-btn[data-panel]').forEach(b =>
+    b.classList.toggle('on', b.dataset.panel === tab));
+}
+function closePanel() {
+  panelOpen = false;
+  $('right-panel').classList.add('closed');
+  document.querySelectorAll('.icon-btn[data-panel]').forEach(b => b.classList.remove('on'));
+}
+function togglePanel(tab) {
+  // 再点同一 Tab 图标 = 收起面板；否则切换/打开
+  if (panelOpen && $('right-panel').querySelector('.rp-body.on')?.id === tab) closePanel();
+  else openPanel(tab);
+}
+document.querySelectorAll('.rp-tab').forEach(t =>
+  t.addEventListener('click', () => openPanel(t.dataset.rp)));
+$('btn-panel-files').addEventListener('click', () => togglePanel('rp-files'));
+$('btn-panel-members').addEventListener('click', () => togglePanel('rp-members'));
+$('btn-panel-settings').addEventListener('click', () => togglePanel('rp-identity'));
+document.querySelectorAll('[data-panel]').forEach(b => { b.dataset.panel = ''; });
+$('btn-panel-files').dataset.panel = 'rp-files';
+$('btn-panel-members').dataset.panel = 'rp-members';
+$('btn-panel-settings').dataset.panel = 'rp-identity';
 
-$('btn-burger').addEventListener('click', () => $('sidebar').classList.toggle('collapsed'));
+$('btn-burger') && $('btn-burger').addEventListener('click', () => $('sidebar').classList.toggle('collapsed'));
 $('btn-send').addEventListener('click', sendText);
 $('draft').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }
@@ -304,11 +340,13 @@ $('draft').addEventListener('input', () => {
   if (v.endsWith('@')) showMentionPop();
   else { hideMentionPop(); updateScopeTip(parseMentionsFromText(v)); }
 });
-$('btn-stop-all').addEventListener('click', () => {
+function stopAll() {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'interrupt', text: '停止全部' }));
   }
-});
+}
+$('btn-stop-all').addEventListener('click', stopAll);
+$('btn-stop-all2').addEventListener('click', stopAll);
 $('btn-save-llm').addEventListener('click', async () => {
   const cfg = { base_url: $('llm-url').value.trim(), api_key: $('llm-key').value.trim(), model: $('llm-model').value.trim() };
   if (!cfg.base_url || !cfg.model) return alertSys('请至少填写 Base URL 与模型名');
@@ -356,6 +394,7 @@ async function openAddExternal() {
   $('modal-mask').classList.add('on');
 }
 $('btn-add-external').addEventListener('click', openAddExternal);
+$('btn-add-external2').addEventListener('click', openAddExternal);
 $('btn-ext-cancel').addEventListener('click', () => $('modal-mask').classList.remove('on'));
 $('btn-ext-done').addEventListener('click', () => $('modal-mask').classList.remove('on'));
 $('btn-ext-create').addEventListener('click', async () => {

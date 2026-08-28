@@ -8,29 +8,96 @@
   :root{
     --ink:#1b1b1f; --muted:#5c5c66; --line:#e6e6ec; --bg:#f6f6f8;
     --card:#ffffff; --brand:#4b3fe3; --brand-soft:#f2f0ff; --brand-ink:#2a2380;
-    --accent:#0f766e; --warn:#b45309; --danger:#b42318;
+    --accent:#0f766e; --warn:#b45309; --danger:#b42318; --wx-green:#07c160;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   body{font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
     color:var(--ink);background:var(--bg);height:100vh;overflow:hidden;}
   #app{display:flex;height:100vh;}
 
-  /* ===== 左侧栏：交互与设置 ===== */
-  aside{width:320px;min-width:280px;background:var(--card);border-right:1px solid var(--line);
-    display:flex;flex-direction:column;transition:margin .2s ease;}
-  aside.collapsed{margin-left:-320px;}
-  .side-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;
-    align-items:center;gap:10px;}
-  .side-head .logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#1a1759,#4b3fe3);
+  /* ===== 左侧：会话列表（微信式） ===== */
+  #chat-list{width:262px;min-width:240px;background:var(--card);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;flex:none;}
+  .cl-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;}
+  .cl-head .logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#1a1759,#4b3fe3);
     color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none;}
-  .side-head h1{font-size:15px;}
-  .side-head small{display:block;color:var(--muted);font-weight:400;font-size:11px;}
-  .tabs{display:flex;border-bottom:1px solid var(--line);}
-  .tab{flex:1;text-align:center;padding:9px 0;font-size:12.5px;color:var(--muted);
-    cursor:pointer;border-bottom:2px solid transparent;user-select:none;}
-  .tab.on{color:var(--brand-ink);border-bottom-color:var(--brand);font-weight:600;background:var(--brand-soft);}
-  .pane{flex:1;overflow-y:auto;padding:14px 16px;display:none;}
-  .pane.on{display:block;}
+  .cl-head h1{font-size:15px;}
+  .cl-head small{display:block;color:var(--muted);font-weight:400;font-size:11px;}
+  .cl-search{margin:10px 12px;padding:7px 12px;background:#f4f4f5;border-radius:8px;
+    color:#b6b6bd;font-size:12px;user-select:none;}
+  .cl-group{font-size:11px;color:var(--muted);padding:8px 16px 4px;}
+  .convo{display:flex;gap:11px;padding:11px 14px;cursor:pointer;border-left:3px solid transparent;}
+  .convo:hover{background:#f7f7f9;}
+  .convo.active{background:#eef0f6;border-left-color:var(--brand);}
+  .convo-avatar{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#1a1759,#4b3fe3);
+    color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex:none;}
+  .convo-info{flex:1;min-width:0;}
+  .convo-name{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:6px;}
+  .convo-name .cnt{font-size:10.5px;font-weight:400;color:var(--muted);}
+  .convo-last{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;
+    white-space:nowrap;margin-top:3px;}
+  .convo-time{font-size:10.5px;color:#c4c4cc;flex:none;}
+  .cl-footer{padding:10px 12px;border-top:1px solid var(--line);display:flex;gap:8px;}
+  .cl-footer .btn{flex:1;}
+
+  /* ===== 右侧：聊天窗（微信式） ===== */
+  #chat-view{flex:1;display:flex;flex-direction:column;min-width:0;}
+  .topbar{height:52px;background:var(--card);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:12px;padding:0 16px;flex:none;}
+  .room-name{font-size:15px;font-weight:600;}
+  .chip{font-size:11.5px;padding:3px 11px;border-radius:999px;background:var(--bg);color:var(--muted);
+    border:1px solid var(--line);}
+  .chip.warn{color:var(--warn);background:#fef6ec;border-color:#fde4c3;}
+  .spacer{flex:1;}
+  .icon-btn{border:none;background:none;font-size:15px;cursor:pointer;padding:5px 9px;border-radius:8px;
+    color:#5c5c66;font-family:inherit;line-height:1;}
+  .icon-btn:hover{background:#f0f0f3;}
+  .icon-btn.on{background:var(--brand-soft);color:var(--brand-ink);}
+  .icon-btn.danger:hover{background:#fef3f2;color:var(--danger);}
+
+  .feed{flex:1;overflow-y:auto;padding:20px 26px;display:flex;flex-direction:column;gap:14px;}
+  .msg{max-width:66%;padding:9px 13px;border-radius:13px;font-size:13.5px;line-height:1.65;
+    position:relative;box-shadow:0 1px 2px rgba(0,0,0,.05);word-break:break-word;}
+  .msg.human{align-self:flex-end;background:#95ec69;color:var(--ink);border-bottom-right-radius:4px;}
+  .msg.agent{align-self:flex-start;background:var(--card);border:1px solid #ececf1;border-bottom-left-radius:4px;}
+  .msg.system{align-self:center;background:#f0f0f3;color:#8a8a94;font-size:12px;border-radius:999px;
+    padding:5px 16px;box-shadow:none;text-align:center;}
+  .msg .who{font-size:11px;opacity:.75;margin-bottom:2px;display:flex;gap:6px;align-items:center;}
+  .msg.human .who{justify-content:flex-end;}
+  .lbl{font-size:9.5px;padding:0 6px;border-radius:999px;background:rgba(0,0,0,.12);}
+  .msg.agent .lbl{background:var(--brand-soft);color:var(--brand-ink);}
+  .typing{font-size:11px;color:var(--muted);align-self:flex-start;padding:2px 6px;display:none;}
+
+  /* 输入区（微信式：无边框输入 + 绿色发送） */
+  .composer{border-top:1px solid var(--line);background:var(--card);padding:8px 16px 12px;
+    position:relative;flex:none;}
+  #draft{width:100%;border:none;resize:none;font-size:14px;font-family:inherit;background:transparent;
+    height:58px;padding:6px 2px 0;line-height:1.6;}
+  #draft:focus{outline:none;}
+  .composer .row{display:flex;align-items:center;gap:10px;padding-top:4px;}
+  .composer .tip{font-size:11px;color:var(--muted);}
+  .send{background:var(--wx-green);color:#fff;border:none;border-radius:8px;padding:8px 26px;
+    font-size:13.5px;cursor:pointer;font-family:inherit;font-weight:600;}
+  .send:hover{filter:brightness(1.06);}
+
+  /* @提及弹出层 */
+  .mention-pop{position:absolute;bottom:100%;left:16px;right:16px;background:#fff;
+    border:1px solid var(--line);border-radius:10px;box-shadow:0 -6px 22px rgba(27,27,31,.12);
+    display:none;z-index:20;overflow:hidden;}
+  .mention-pop .mp-item{padding:8px 14px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;}
+  .mention-pop .mp-item:hover,.mention-pop .mp-item.on{background:var(--brand-soft);}
+  .mention-pop .mp-item.all{border-bottom:1px dashed var(--line);color:var(--brand-ink);font-weight:600;}
+
+  /* ===== 右侧内嵌面板（文件/任务/成员/身份卡/模型/记忆） ===== */
+  #right-panel{width:402px;background:var(--card);border-left:1px solid var(--line);
+    display:flex;flex-direction:column;flex:none;min-width:0;}
+  #right-panel.closed{display:none;}
+  .rp-tabs{display:flex;border-bottom:1px solid var(--line);padding:0 8px;flex:none;overflow-x:auto;}
+  .rp-tab{padding:10px 12px;font-size:12px;color:var(--muted);cursor:pointer;
+    border-bottom:2px solid transparent;white-space:nowrap;user-select:none;}
+  .rp-tab.on{color:var(--brand-ink);border-bottom-color:var(--brand);font-weight:600;}
+  .rp-body{flex:1;overflow-y:auto;padding:14px 16px;font-size:12.5px;color:var(--muted);display:none;}
+  .rp-body.on{display:block;}
   .grp{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;}
   .grp:first-child{margin-top:0;}
   .member{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:9px;font-size:13.5px;}
@@ -40,65 +107,46 @@
   .badge{font-size:10.5px;padding:1px 8px;border-radius:999px;background:var(--brand-soft);
     color:var(--brand-ink);margin-left:auto;}
   label.f{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 4px;}
-  input[type=text],input[type=password]{width:100%;padding:8px 10px;border:1px solid var(--line);
+  input[type=text],input[type=password],select{width:100%;padding:8px 10px;border:1px solid var(--line);
     border-radius:8px;font-size:13px;font-family:inherit;background:#fafafc;}
-  input:focus{outline:2px solid var(--brand-soft);border-color:var(--brand);}
+  input:focus,select:focus{outline:2px solid var(--brand-soft);border-color:var(--brand);}
   .btn{display:inline-block;border:none;border-radius:9px;padding:9px 16px;font-size:13px;
-    cursor:pointer;font-family:inherit;font-weight:500;}
+    cursor:pointer;font-family:inherit;font-weight:500;text-align:center;}
   .btn.primary{background:var(--brand);color:#fff;width:100%;margin-top:12px;}
   .btn.primary:hover{filter:brightness(1.08);}
+  .btn.ghost{background:var(--bg);color:var(--muted);}
   .btn.danger-full{background:#fef3f2;color:var(--danger);border:1px solid #fecaca;width:100%;margin-top:10px;}
+  .btn.sm{width:auto;padding:6px 12px;font-size:12px;margin:0;}
   .hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6;}
   .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#d1d5db;margin-right:5px;}
   .dot.ok{background:#10b981;} .dot.no{background:#ef4444;}
 
-  /* 输入区固定底部 */
-  .composer{border-top:1px solid var(--line);padding:12px 14px;display:flex;flex-direction:column;gap:8px;}
-  .composer textarea{resize:none;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
-    font-size:13.5px;font-family:inherit;height:64px;background:#fafafc;}
-  .composer textarea:focus{outline:2px solid var(--brand-soft);border-color:var(--brand);}
-  .composer .row{display:flex;gap:8px;align-items:center;}
-  .send{background:var(--brand);color:#fff;border:none;border-radius:9px;padding:9px 20px;
-    font-size:13px;cursor:pointer;flex:1;font-family:inherit;font-weight:500;}
-  .send:hover{filter:brightness(1.08);}
-  .stop-all{background:#fef3f2;color:var(--danger);border:1px solid #fecaca;border-radius:9px;
-    padding:9px 12px;font-size:12.5px;cursor:pointer;font-family:inherit;}
-  kbd.tip{font-size:10.5px;color:var(--muted);}
+  /* 身份卡编辑器 */
+  .tool-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:6px;}
+  .tool-grid label{font-size:12px;color:var(--ink);display:flex;align-items:center;gap:6px;}
+  .idcard{border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin-bottom:8px;
+    cursor:pointer;font-size:12.5px;background:#fafafc;display:flex;align-items:center;gap:8px;}
+  .idcard:hover{border-color:var(--brand);}
+  .idcard.sel{border-color:var(--brand);background:var(--brand-soft);}
+  .idcard .cv{margin-left:auto;color:var(--muted);font-size:11px;}
+  input[type=range]{width:100%;accent-color:var(--brand);}
+  .member select{margin-left:auto;border:1px solid var(--line);border-radius:7px;
+    font-size:11.5px;padding:3px 5px;background:#fff;max-width:110px;}
 
-  /* ===== 右侧工作台 ===== */
-  main{flex:1;display:flex;flex-direction:column;min-width:0;}
-  .topbar{height:52px;background:var(--card);border-bottom:1px solid var(--line);
-    display:flex;align-items:center;gap:14px;padding:0 18px;flex:none;}
-  .burger{border:none;background:none;font-size:17px;cursor:pointer;color:var(--muted);padding:4px 8px;border-radius:7px;}
-  .burger:hover{background:var(--bg);}
-  .room-name{font-size:15px;font-weight:600;}
-  .chip{font-size:11.5px;padding:3px 11px;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--line);}
-  .chip.warn{color:var(--warn);background:#fef6ec;border-color:#fde4c3;}
-  .spacer{flex:1;}
-  .feed{flex:1;overflow-y:auto;padding:22px 26px;display:flex;flex-direction:column;gap:12px;}
-  .msg{max-width:78%;padding:9px 14px;border-radius:13px;font-size:13.5px;line-height:1.65;position:relative;}
-  .msg.human{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:4px;}
-  .msg.agent{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-bottom-left-radius:4px;}
-  .msg.system{align-self:center;background:#fef6ec;color:var(--warn);font-size:12px;border-radius:999px;padding:5px 16px;}
-  .msg .who{font-size:11px;opacity:.75;margin-bottom:2px;display:flex;gap:6px;align-items:center;}
-  .msg.human .who{justify-content:flex-end;}
-  .lbl{font-size:9.5px;padding:0 6px;border-radius:999px;background:rgba(255,255,255,.25);}
-  .msg.agent .lbl{background:var(--brand-soft);color:var(--brand-ink);}
-  .typing{font-size:11px;color:var(--muted);align-self:flex-start;padding:2px 6px;display:none;}
-  .bottom-panel{height:170px;flex:none;border-top:1px solid var(--line);background:var(--card);
-    display:flex;flex-direction:column;}
-  .bp-tabs{display:flex;border-bottom:1px solid var(--line);padding:0 12px;}
-  .bp-tab{padding:8px 16px;font-size:12px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;}
-  .bp-tab.on{color:var(--brand-ink);border-bottom-color:var(--brand);font-weight:600;}
-  .bp-body{flex:1;overflow-y:auto;padding:12px 18px;font-size:12.5px;color:var(--muted);display:none;}
-  .bp-body.on{display:block;}
+  /* 外部成员 */
+  .kind-badge{font-size:9.5px;padding:0 6px;border-radius:999px;margin-left:4px;}
+  .kind-badge.internal{background:var(--brand-soft);color:var(--brand-ink);}
+  .kind-badge.external{background:#ecfdf5;color:#047857;}
+  .member .copy-tok{margin-left:auto;border:1px solid var(--line);background:#fff;border-radius:7px;
+    font-size:10.5px;padding:3px 8px;cursor:pointer;color:var(--muted);}
+  .member .copy-tok:hover{border-color:var(--brand);color:var(--brand-ink);}
 
-  /* 文件工作区（第 4 步） */
-  .files-wrap{display:flex;gap:14px;height:100%;}
-  .files-left{width:46%;min-width:260px;display:flex;flex-direction:column;}
-  .files-right{flex:1;display:flex;flex-direction:column;min-width:0;}
+  /* 文件工作区（面板内上下布局：树上预览下） */
+  .files-wrap{display:flex;flex-direction:column;gap:10px;height:100%;}
+  .files-left{display:flex;flex-direction:column;max-height:46%;min-height:140px;}
+  .files-right{flex:1;display:flex;flex-direction:column;min-height:120px;}
   .files-head{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink);
-    padding-bottom:6px;border-bottom:1px solid var(--line);margin-bottom:6px;}
+    padding-bottom:6px;border-bottom:1px solid var(--line);margin-bottom:6px;flex:none;}
   .files-head .spacer{flex:1;}
   .mini-btn{border:1px solid var(--line);background:#fff;border-radius:7px;font-size:11px;
     padding:3px 9px;cursor:pointer;color:var(--muted);font-family:inherit;}
@@ -111,14 +159,14 @@
   .file-dir{color:var(--muted);font-size:11px;}
   .file-ver{flex:none;font-size:10.5px;background:var(--brand-soft);color:var(--brand-ink);
     padding:0 7px;border-radius:999px;}
-  .file-author{flex:none;font-size:10.5px;color:var(--muted);max-width:110px;overflow:hidden;
+  .file-author{flex:none;font-size:10.5px;color:var(--muted);max-width:90px;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap;}
   .file-author.hum{color:var(--accent);}
   .file-del{flex:none;border:none;background:none;color:#d1d5db;cursor:pointer;font-size:11px;
     padding:1px 4px;border-radius:5px;}
   .file-del:hover{color:var(--danger);background:#fef3f2;}
   #file-preview{flex:1;resize:none;border:1px solid var(--line);border-radius:9px;padding:9px 11px;
-    font-size:12px;font-family:Consolas,monospace;background:#fafafc;line-height:1.55;}
+    font-size:12px;font-family:Consolas,monospace;background:#fafafc;line-height:1.55;min-height:90px;}
   #file-preview:focus{outline:2px solid var(--brand-soft);border-color:var(--brand);}
   .msg.deliver{border-color:#a7f3d0;background:#f0fdf4;}
   .deliver-file{display:inline-flex;align-items:center;gap:4px;margin-top:5px;padding:3px 10px;
@@ -128,37 +176,7 @@
   .tool-note{margin-top:4px;font-size:10.5px;color:var(--muted);background:var(--bg);
     border-radius:6px;padding:1px 8px;display:inline-block;}
 
-  /* 身份卡编辑器 */
-  .tool-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:6px;}
-  .tool-grid label{font-size:12px;color:var(--ink);display:flex;align-items:center;gap:6px;}
-  .idcard{border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin-bottom:8px;
-    cursor:pointer;font-size:12.5px;background:#fafafc;display:flex;align-items:center;gap:8px;}
-  .idcard:hover{border-color:var(--brand);}
-  .idcard.sel{border-color:var(--brand);background:var(--brand-soft);}
-  .idcard .cv{margin-left:auto;color:var(--muted);font-size:11px;}
-  input[type=range]{width:100%;accent-color:var(--brand);}
-
-  /* 成员卡（含换绑） */
-  .member{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:9px;font-size:13.5px;}
-  .member select{margin-left:auto;border:1px solid var(--line);border-radius:7px;
-    font-size:11.5px;padding:3px 5px;background:#fff;max-width:110px;}
-
-  /* @提及弹出层 */
-  .mention-pop{position:absolute;bottom:100%;left:14px;right:14px;background:#fff;
-    border:1px solid var(--line);border-radius:10px;box-shadow:0 -6px 22px rgba(27,27,31,.12);
-    display:none;z-index:20;overflow:hidden;}
-  .mention-pop .mp-item{padding:8px 14px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;}
-  .mention-pop .mp-item:hover,.mention-pop .mp-item.on{background:var(--brand-soft);}
-  .mention-pop .mp-item.all{border-bottom:1px dashed var(--line);color:var(--brand-ink);font-weight:600;}
-  .composer{position:relative;}
-
-  /* 外部成员（第 3 步） */
-  .kind-badge{font-size:9.5px;padding:0 6px;border-radius:999px;margin-left:4px;}
-  .kind-badge.internal{background:var(--brand-soft);color:var(--brand-ink);}
-  .kind-badge.external{background:#ecfdf5;color:#047857;}
-  .member .copy-tok{margin-left:auto;border:1px solid var(--line);background:#fff;border-radius:7px;
-    font-size:10.5px;padding:3px 8px;cursor:pointer;color:var(--muted);}
-  .member .copy-tok:hover{border-color:var(--brand);color:var(--brand-ink);}
+  /* 弹窗（添加外部成员） */
   .modal-mask{position:fixed;inset:0;background:rgba(27,27,31,.35);display:none;
     align-items:center;justify-content:center;z-index:50;}
   .modal-mask.on{display:flex;}
@@ -175,36 +193,103 @@
 <body>
 <div id="app">
 
-  <aside id="sidebar">
-    <div class="side-head">
+  <!-- 左侧：会话列表 -->
+  <aside id="chat-list">
+    <div class="cl-head">
       <div class="logo">AR</div>
       <h1>Agent Room<small>多Agent群聊协作 · 本机运行</small></h1>
     </div>
-    <div class="tabs">
-      <div class="tab on" data-pane="p-room">房间</div>
-      <div class="tab" data-pane="p-identity">身份卡</div>
-      <div class="tab" data-pane="p-model">模型</div>
-      <div class="tab" data-pane="p-memory">记忆</div>
+    <div class="cl-search">🔍 搜索会话（MVP 占位）</div>
+    <div class="cl-group">会话</div>
+    <div class="convo active" id="convo-main">
+      <div class="convo-avatar">主</div>
+      <div class="convo-info">
+        <div class="convo-name">主房间 <span class="cnt" id="convo-count">· 0 成员</span></div>
+        <div class="convo-last" id="convo-last">— 新会话，说点什么吧 —</div>
+      </div>
+      <div class="convo-time" id="convo-time">现在</div>
+    </div>
+    <div class="cl-footer">
+      <button class="btn primary sm" id="btn-add-external">＋ 添加外部成员</button>
+    </div>
+  </aside>
+
+  <!-- 右侧：聊天窗 -->
+  <main id="chat-view">
+    <div class="topbar">
+      <span class="room-name">主房间</span>
+      <span class="chip" id="ws-chip">● 连接中…</span>
+      <span class="chip" id="llm-chip">LLM 未配置</span>
+      <span class="spacer"></span>
+      <button class="icon-btn" id="btn-panel-files" title="文件工作区">📁</button>
+      <button class="icon-btn" id="btn-panel-members" title="成员管理">👥</button>
+      <button class="icon-btn" id="btn-panel-settings" title="身份卡与模型设置">⚙️</button>
+      <button class="icon-btn danger" id="btn-stop-all" title="停止全部（P0 interrupt）">⏹</button>
+    </div>
+    <div class="feed" id="feed"></div>
+    <div class="typing" id="typing">Agent A 正在输入…</div>
+    <div class="composer">
+      <textarea id="draft" placeholder="输入消息，Enter 发送；输入 @ 弹出成员选择…"></textarea>
+      <div id="mention-pop" class="mention-pop"></div>
+      <div class="row">
+        <span class="tip" id="scope-tip">广播模式：全体 Agent 可见可回</span>
+        <span class="spacer"></span>
+        <button class="send" id="btn-send">发 送</button>
+      </div>
+    </div>
+  </main>
+
+  <!-- 右侧内嵌面板：文件 / 任务 / 成员 / 身份卡 / 模型 / 记忆 -->
+  <aside id="right-panel" class="closed">
+    <div class="rp-tabs">
+      <div class="rp-tab on" data-rp="rp-files">文件</div>
+      <div class="rp-tab" data-rp="rp-task">任务</div>
+      <div class="rp-tab" data-rp="rp-members">成员</div>
+      <div class="rp-tab" data-rp="rp-identity">身份卡</div>
+      <div class="rp-tab" data-rp="rp-model">模型</div>
+      <div class="rp-tab" data-rp="rp-memory">记忆</div>
     </div>
 
-    <!-- 房间面板 -->
-    <div class="pane on" id="p-room">
-      <div class="grp">房间</div>
-      <div class="member">🏠 主房间</div>
-      <div class="grp">成员 · <span id="agent-count">0</span>（右侧选身份卡换绑）</div>
+    <div class="rp-body on" id="rp-files">
+      <div class="files-wrap">
+        <div class="files-left">
+          <div class="files-head">
+            <span>文件工作区 · <b id="file-count">0</b></span>
+            <span class="spacer"></span>
+            <button class="mini-btn" id="btn-upload">⬆ 上传</button>
+            <input type="file" id="file-input" style="display:none;">
+          </div>
+          <div id="file-tree" class="file-tree"></div>
+        </div>
+        <div class="files-right">
+          <div class="files-head">
+            <span id="file-preview-head">点文件名预览</span>
+            <span class="spacer"></span>
+            <button class="mini-btn" id="btn-save-preview">💾 保存</button>
+          </div>
+          <textarea id="file-preview" placeholder="文件内容预览与编辑（保存走乐观锁，冲突会提示刷新）"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="rp-body" id="rp-task">
+      <div class="grp">任务进度</div>
+      <div class="hint">MVP 第 5 步接入：CEO 拆目标 → 排产单 → 验收闭环的进度视图。</div>
+    </div>
+
+    <div class="rp-body" id="rp-members">
+      <div class="grp">成员 · <span id="agent-count">0</span>（右侧下拉换绑身份卡）</div>
       <div id="member-list"></div>
-      <button class="btn primary" id="btn-add-external" style="margin-top:8px;">＋ 添加外部成员（TRAE / ZCode）</button>
-      <div class="grp">快捷操作</div>
-      <button class="btn danger-full" id="btn-stop-all">■ 停止全部（P0 interrupt）</button>
+      <button class="btn primary sm" id="btn-add-external2" style="margin-top:8px;">＋ 添加外部成员（TRAE / ZCode）</button>
+      <div class="grp" style="margin-top:16px;">快捷操作</div>
+      <button class="btn danger-full" id="btn-stop-all2">■ 停止全部（P0 interrupt）</button>
       <div class="hint">P0 生效会取消所有 Agent 正在进行的生成，且重置互聊轮数。</div>
     </div>
 
-    <!-- 身份卡面板 -->
-    <div class="pane" id="p-identity">
+    <div class="rp-body" id="rp-identity">
       <div class="grp">身份卡列表</div>
       <div id="id-list"></div>
-      <button class="btn primary" id="btn-new-id" style="margin-top:6px;">＋ 新建身份卡</button>
-
+      <button class="btn primary sm" id="btn-new-id" style="margin-top:6px;">＋ 新建身份卡</button>
       <div class="grp" style="margin-top:18px;">编辑器</div>
       <label class="f">显示标签 label</label>
       <input type="text" id="id-label" placeholder="如：调研员">
@@ -216,15 +301,14 @@
       <div id="id-tools" class="tool-grid"></div>
       <label class="f">互聊轮数上限 budget_turns：<b id="id-turns-v">6</b></label>
       <input type="range" id="id-turns" min="1" max="12" value="6">
-      <div class="row" style="margin-top:10px;gap:8px;">
-        <button class="btn primary" id="btn-save-id" style="margin-top:0;width:auto;flex:1;">保存</button>
-        <button class="btn danger-full" id="btn-del-id" style="margin-top:0;width:auto;flex:1;">删除</button>
+      <div class="row" style="margin-top:10px;gap:8px;display:flex;">
+        <button class="btn primary sm" id="btn-save-id" style="margin-top:0;flex:1;">保存</button>
+        <button class="btn danger-full sm" id="btn-del-id" style="margin-top:0;flex:1;">删除</button>
       </div>
-      <div class="hint">保存后可在「房间 → 成员」为 Agent 换绑；编辑器按 s5 字段化冻结，YAML 导入导出随第 3 步开放。</div>
+      <div class="hint">保存后可在「成员」页为 Agent 换绑；编辑器按 s5 字段化冻结。</div>
     </div>
 
-    <!-- 模型面板 -->
-    <div class="pane" id="p-model">
+    <div class="rp-body" id="rp-model">
       <div class="grp">LLM · OpenAI 兼容端点</div>
       <label class="f">Base URL</label>
       <input type="text" id="llm-url" placeholder="https://api.example.com/v1">
@@ -236,90 +320,38 @@
       <div class="hint">密钥仅存服务端进程内存，前端零持久化；V2 迁移到加密存储与多模型插槽。</div>
     </div>
 
-    <!-- 记忆面板 -->
-    <div class="pane" id="p-memory">
-      <div class="grp">向量记忆库（MVP 第 4 步接入）</div>
+    <div class="rp-body" id="rp-memory">
+      <div class="grp">向量记忆库（MVP 第 5 步接入）</div>
       <div class="hint">规划：房间级公共记忆 + Agent 私有记忆隔离存储于本地 Chroma/Qdrant，任务验收后沉淀结论，检索注入上下文。</div>
     </div>
-
-    <div class="composer">
-      <textarea id="draft" placeholder="输入消息，Enter 发送；输入 @ 弹出成员选择…"></textarea>
-      <div id="mention-pop" class="mention-pop"></div>
-      <div class="row">
-        <button class="send" id="btn-send">发 送</button>
-        <span class="tip" id="scope-tip">广播模式：全体 Agent 可见可回</span>
-      </div>
-    </div>
   </aside>
+</div>
 
-  <main>
-    <div class="topbar">
-      <button class="burger" id="btn-burger" title="折叠/展开左侧栏">☰</button>
-      <span class="room-name">主房间</span>
-      <span class="chip" id="ws-chip">● 连接中…</span>
-      <span class="spacer"></span>
-      <span class="chip" id="llm-chip">LLM 未配置</span>
+<!-- 添加外部成员弹窗 -->
+<div class="modal-mask" id="modal-mask">
+  <div class="modal">
+    <div id="modal-form">
+      <h3>添加外部成员</h3>
+      <label class="f">成员名称（如：TRAE·开发员）</label>
+      <input type="text" id="ext-name" placeholder="TRAE·开发员">
+      <label class="f">绑定身份卡（可稍后换绑）</label>
+      <select id="ext-identity" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
+        <option value="">— 暂不绑定 —</option>
+      </select>
+      <button class="btn primary" id="btn-ext-create">创建并发放令牌</button>
+      <button class="btn ghost" id="btn-ext-cancel" style="width:100%;margin-top:8px;">取消</button>
     </div>
-    <div class="feed" id="feed"></div>
-    <div class="typing" id="typing">Agent A 正在输入…</div>
-    <div class="bottom-panel">
-      <div class="bp-tabs">
-        <div class="bp-tab on" data-bp="bp-files">文件工作区</div>
-        <div class="bp-tab" data-bp="bp-task">任务进度</div>
-        <div class="bp-tab" data-bp="bp-replay">事件回放</div>
-      </div>
-      <div class="bp-body on" id="bp-files">
-        <div class="files-wrap">
-          <div class="files-left">
-            <div class="files-head">
-              <span>文件工作区 · <b id="file-count">0</b></span>
-              <span class="spacer"></span>
-              <button class="mini-btn" id="btn-upload">⬆ 上传</button>
-              <input type="file" id="file-input" style="display:none;">
-            </div>
-            <div id="file-tree" class="file-tree"></div>
-          </div>
-          <div class="files-right">
-            <div class="files-head">
-              <span id="file-preview-head">点文件名预览</span>
-              <span class="spacer"></span>
-              <button class="mini-btn" id="btn-save-preview">💾 保存</button>
-            </div>
-            <textarea id="file-preview" placeholder="文件内容预览与编辑（保存走乐观锁，冲突会提示刷新）"></textarea>
-          </div>
-        </div>
-      </div>
-      <div class="bp-body" id="bp-task">MVP 第 5 步接入：CEO 拆目标 → 排产单 → 验收闭环的进度视图。</div>
-      <div class="bp-body" id="bp-replay">一切皆消息（append-only），此处将提供按任务回放与审计。</div>
-    </div>
-  </main>
-
-  <!-- 添加外部成员弹窗 -->
-  <div class="modal-mask" id="modal-mask">
-    <div class="modal">
-      <div id="modal-form">
-        <h3>添加外部成员</h3>
-        <label class="f">成员名称（如：TRAE·开发员）</label>
-        <input type="text" id="ext-name" placeholder="TRAE·开发员">
-        <label class="f">绑定身份卡（可稍后换绑）</label>
-        <select id="ext-identity" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
-          <option value="">— 暂不绑定 —</option>
-        </select>
-        <button class="btn primary" id="btn-ext-create">创建并发放令牌</button>
-        <button class="btn" id="btn-ext-cancel" style="width:100%;margin-top:8px;background:var(--bg);color:var(--muted);">取消</button>
-      </div>
-      <div id="modal-result" style="display:none;">
-        <h3>✅ 成员已创建 · 令牌仅显示这一次</h3>
-        <div class="hint">ROOM_TOKEN（重发将使旧令牌失效）：</div>
-        <div class="token-box" id="ext-token"></div>
-        <div class="hint">ZCode 接入（<code>.zcode/config.json</code> → mcp.servers）：</div>
-        <textarea id="cfg-zcode" readonly></textarea>
-        <div class="hint">TRAE 接入（stdio 桥命令）：</div>
-        <textarea id="cfg-trae" readonly></textarea>
-        <div class="row" style="display:flex;gap:8px;margin-top:12px;">
-          <button class="btn primary" id="btn-copy-all" style="margin-top:0;flex:1;">📋 复制全部配置</button>
-          <button class="btn" id="btn-ext-done" style="margin-top:0;flex:1;background:var(--bg);color:var(--muted);">完成</button>
-        </div>
+    <div id="modal-result" style="display:none;">
+      <h3>✅ 成员已创建 · 令牌仅显示这一次</h3>
+      <div class="hint">ROOM_TOKEN（重发将使旧令牌失效）：</div>
+      <div class="token-box" id="ext-token"></div>
+      <div class="hint">ZCode 接入（<code>.zcode/config.json</code> → mcp.servers）：</div>
+      <textarea id="cfg-zcode" readonly></textarea>
+      <div class="hint">TRAE 接入（stdio 桥命令）：</div>
+      <textarea id="cfg-trae" readonly></textarea>
+      <div class="row" style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn primary" id="btn-copy-all" style="margin-top:0;flex:1;">📋 复制全部配置</button>
+        <button class="btn ghost" id="btn-ext-done" style="margin-top:0;flex:1;">完成</button>
       </div>
     </div>
   </div>
