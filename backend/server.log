@@ -1,0 +1,27 @@
+INFO:     Started server process [22372]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8899 (Press CTRL+C to quit)
+INFO:     127.0.0.1:57467 - "WebSocket /ws/default" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57471 - "WebSocket /ws/default" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57487 - "WebSocket /ws/default" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57493 - "WebSocket /ws/default" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:57507 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57508 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57523 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63206 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65040 - "GET /api/health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63206 - "GET /app.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63206 - "GET /api/room/default HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65039 - "GET /api/identities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63206 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:65039 - "GET /api/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55404 - "WebSocket /ws/default" [accepted]
+INFO:     connection open
+INFO:     127.0.0.1:52676 - "GET /api/agents HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55034 - "GET /api/identities HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55035 - "GET /api/agents HTTP/1.1" 200 OK

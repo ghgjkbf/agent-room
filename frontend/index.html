@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agent Room · 多Agent群聊协作</title>
+<style>
+  :root{
+    --ink:#1b1b1f; --muted:#5c5c66; --line:#e6e6ec; --bg:#f6f6f8;
+    --card:#ffffff; --brand:#4b3fe3; --brand-soft:#f2f0ff; --brand-ink:#2a2380;
+    --accent:#0f766e; --warn:#b45309; --danger:#b42318;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    color:var(--ink);background:var(--bg);height:100vh;overflow:hidden;}
+  #app{display:flex;height:100vh;}
+
+  /* ===== 左侧栏：交互与设置 ===== */
+  aside{width:320px;min-width:280px;background:var(--card);border-right:1px solid var(--line);
+    display:flex;flex-direction:column;transition:margin .2s ease;}
+  aside.collapsed{margin-left:-320px;}
+  .side-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;
+    align-items:center;gap:10px;}
+  .side-head .logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#1a1759,#4b3fe3);
+    color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none;}
+  .side-head h1{font-size:15px;}
+  .side-head small{display:block;color:var(--muted);font-weight:400;font-size:11px;}
+  .tabs{display:flex;border-bottom:1px solid var(--line);}
+  .tab{flex:1;text-align:center;padding:9px 0;font-size:12.5px;color:var(--muted);
+    cursor:pointer;border-bottom:2px solid transparent;user-select:none;}
+  .tab.on{color:var(--brand-ink);border-bottom-color:var(--brand);font-weight:600;background:var(--brand-soft);}
+  .pane{flex:1;overflow-y:auto;padding:14px 16px;display:none;}
+  .pane.on{display:block;}
+  .grp{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;}
+  .grp:first-child{margin-top:0;}
+  .member{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:9px;font-size:13.5px;}
+  .member:hover{background:var(--bg);}
+  .avatar{width:28px;height:28px;border-radius:50%;background:var(--brand-soft);color:var(--brand-ink);
+    display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;}
+  .badge{font-size:10.5px;padding:1px 8px;border-radius:999px;background:var(--brand-soft);
+    color:var(--brand-ink);margin-left:auto;}
+  label.f{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 4px;}
+  input[type=text],input[type=password]{width:100%;padding:8px 10px;border:1px solid var(--line);
+    border-radius:8px;font-size:13px;font-family:inherit;background:#fafafc;}
+  input:focus{outline:2px solid var(--brand-soft);border-color:var(--brand);}
+  .btn{display:inline-block;border:none;border-radius:9px;padding:9px 16px;font-size:13px;
+    cursor:pointer;font-family:inherit;font-weight:500;}
+  .btn.primary{background:var(--brand);color:#fff;width:100%;margin-top:12px;}
+  .btn.primary:hover{filter:brightness(1.08);}
+  .btn.danger-full{background:#fef3f2;color:var(--danger);border:1px solid #fecaca;width:100%;margin-top:10px;}
+  .hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6;}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#d1d5db;margin-right:5px;}
+  .dot.ok{background:#10b981;} .dot.no{background:#ef4444;}
+
+  /* 输入区固定底部 */
+  .composer{border-top:1px solid var(--line);padding:12px 14px;display:flex;flex-direction:column;gap:8px;}
+  .composer textarea{resize:none;border:1px solid var(--line);border-radius:10px;padding:10px 12px;
+    font-size:13.5px;font-family:inherit;height:64px;background:#fafafc;}
+  .composer textarea:focus{outline:2px solid var(--brand-soft);border-color:var(--brand);}
+  .composer .row{display:flex;gap:8px;align-items:center;}
+  .send{background:var(--brand);color:#fff;border:none;border-radius:9px;padding:9px 20px;
+    font-size:13px;cursor:pointer;flex:1;font-family:inherit;font-weight:500;}
+  .send:hover{filter:brightness(1.08);}
+  .stop-all{background:#fef3f2;color:var(--danger);border:1px solid #fecaca;border-radius:9px;
+    padding:9px 12px;font-size:12.5px;cursor:pointer;font-family:inherit;}
+  kbd.tip{font-size:10.5px;color:var(--muted);}
+
+  /* ===== 右侧工作台 ===== */
+  main{flex:1;display:flex;flex-direction:column;min-width:0;}
+  .topbar{height:52px;background:var(--card);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:14px;padding:0 18px;flex:none;}
+  .burger{border:none;background:none;font-size:17px;cursor:pointer;color:var(--muted);padding:4px 8px;border-radius:7px;}
+  .burger:hover{background:var(--bg);}
+  .room-name{font-size:15px;font-weight:600;}
+  .chip{font-size:11.5px;padding:3px 11px;border-radius:999px;background:var(--bg);color:var(--muted);border:1px solid var(--line);}
+  .chip.warn{color:var(--warn);background:#fef6ec;border-color:#fde4c3;}
+  .spacer{flex:1;}
+  .feed{flex:1;overflow-y:auto;padding:22px 26px;display:flex;flex-direction:column;gap:12px;}
+  .msg{max-width:78%;padding:9px 14px;border-radius:13px;font-size:13.5px;line-height:1.65;position:relative;}
+  .msg.human{align-self:flex-end;background:var(--brand);color:#fff;border-bottom-right-radius:4px;}
+  .msg.agent{align-self:flex-start;background:var(--card);border:1px solid var(--line);border-bottom-left-radius:4px;}
+  .msg.system{align-self:center;background:#fef6ec;color:var(--warn);font-size:12px;border-radius:999px;padding:5px 16px;}
+  .msg .who{font-size:11px;opacity:.75;margin-bottom:2px;display:flex;gap:6px;align-items:center;}
+  .msg.human .who{justify-content:flex-end;}
+  .lbl{font-size:9.5px;padding:0 6px;border-radius:999px;background:rgba(255,255,255,.25);}
+  .msg.agent .lbl{background:var(--brand-soft);color:var(--brand-ink);}
+  .typing{font-size:11px;color:var(--muted);align-self:flex-start;padding:2px 6px;display:none;}
+  .bottom-panel{height:170px;flex:none;border-top:1px solid var(--line);background:var(--card);
+    display:flex;flex-direction:column;}
+  .bp-tabs{display:flex;border-bottom:1px solid var(--line);padding:0 12px;}
+  .bp-tab{padding:8px 16px;font-size:12px;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;}
+  .bp-tab.on{color:var(--brand-ink);border-bottom-color:var(--brand);font-weight:600;}
+  .bp-body{flex:1;overflow-y:auto;padding:12px 18px;font-size:12.5px;color:var(--muted);display:none;}
+  .bp-body.on{display:block;}
+
+  /* 身份卡编辑器 */
+  .tool-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:6px;}
+  .tool-grid label{font-size:12px;color:var(--ink);display:flex;align-items:center;gap:6px;}
+  .idcard{border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin-bottom:8px;
+    cursor:pointer;font-size:12.5px;background:#fafafc;display:flex;align-items:center;gap:8px;}
+  .idcard:hover{border-color:var(--brand);}
+  .idcard.sel{border-color:var(--brand);background:var(--brand-soft);}
+  .idcard .cv{margin-left:auto;color:var(--muted);font-size:11px;}
+  input[type=range]{width:100%;accent-color:var(--brand);}
+
+  /* 成员卡（含换绑） */
+  .member{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:9px;font-size:13.5px;}
+  .member select{margin-left:auto;border:1px solid var(--line);border-radius:7px;
+    font-size:11.5px;padding:3px 5px;background:#fff;max-width:110px;}
+
+  /* @提及弹出层 */
+  .mention-pop{position:absolute;bottom:100%;left:14px;right:14px;background:#fff;
+    border:1px solid var(--line);border-radius:10px;box-shadow:0 -6px 22px rgba(27,27,31,.12);
+    display:none;z-index:20;overflow:hidden;}
+  .mention-pop .mp-item{padding:8px 14px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;}
+  .mention-pop .mp-item:hover,.mention-pop .mp-item.on{background:var(--brand-soft);}
+  .mention-pop .mp-item.all{border-bottom:1px dashed var(--line);color:var(--brand-ink);font-weight:600;}
+  .composer{position:relative;}
+
+  /* 外部成员（第 3 步） */
+  .kind-badge{font-size:9.5px;padding:0 6px;border-radius:999px;margin-left:4px;}
+  .kind-badge.internal{background:var(--brand-soft);color:var(--brand-ink);}
+  .kind-badge.external{background:#ecfdf5;color:#047857;}
+  .member .copy-tok{margin-left:auto;border:1px solid var(--line);background:#fff;border-radius:7px;
+    font-size:10.5px;padding:3px 8px;cursor:pointer;color:var(--muted);}
+  .member .copy-tok:hover{border-color:var(--brand);color:var(--brand-ink);}
+  .modal-mask{position:fixed;inset:0;background:rgba(27,27,31,.35);display:none;
+    align-items:center;justify-content:center;z-index:50;}
+  .modal-mask.on{display:flex;}
+  .modal{width:420px;background:#fff;border-radius:14px;padding:20px 22px;box-shadow:0 18px 50px rgba(0,0,0,.22);}
+  .modal h3{font-size:15px;margin-bottom:12px;}
+  .modal .token-box{background:#0f172a;color:#a5f3fc;font-family:Consolas,monospace;font-size:12.5px;
+    border-radius:9px;padding:10px 12px;word-break:break-all;margin:8px 0;}
+  .modal textarea{width:100%;height:84px;background:#0f172a;color:#a5f3fc;font-family:Consolas,monospace;
+    font-size:11px;border:none;border-radius:9px;padding:8px 10px;resize:none;margin-top:6px;}
+  .modal .btn{margin-top:10px;}
+  .modal label.f{margin-top:8px;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <aside id="sidebar">
+    <div class="side-head">
+      <div class="logo">AR</div>
+      <h1>Agent Room<small>多Agent群聊协作 · 本机运行</small></h1>
+    </div>
+    <div class="tabs">
+      <div class="tab on" data-pane="p-room">房间</div>
+      <div class="tab" data-pane="p-identity">身份卡</div>
+      <div class="tab" data-pane="p-model">模型</div>
+      <div class="tab" data-pane="p-memory">记忆</div>
+    </div>
+
+    <!-- 房间面板 -->
+    <div class="pane on" id="p-room">
+      <div class="grp">房间</div>
+      <div class="member">🏠 主房间</div>
+      <div class="grp">成员 · <span id="agent-count">0</span>（右侧选身份卡换绑）</div>
+      <div id="member-list"></div>
+      <button class="btn primary" id="btn-add-external" style="margin-top:8px;">＋ 添加外部成员（TRAE / ZCode）</button>
+      <div class="grp">快捷操作</div>
+      <button class="btn danger-full" id="btn-stop-all">■ 停止全部（P0 interrupt）</button>
+      <div class="hint">P0 生效会取消所有 Agent 正在进行的生成，且重置互聊轮数。</div>
+    </div>
+
+    <!-- 身份卡面板 -->
+    <div class="pane" id="p-identity">
+      <div class="grp">身份卡列表</div>
+      <div id="id-list"></div>
+      <button class="btn primary" id="btn-new-id" style="margin-top:6px;">＋ 新建身份卡</button>
+
+      <div class="grp" style="margin-top:18px;">编辑器</div>
+      <label class="f">显示标签 label</label>
+      <input type="text" id="id-label" placeholder="如：调研员">
+      <label class="f">风格 persona</label>
+      <input type="text" id="id-persona" placeholder="严谨、简洁、不懂就问">
+      <label class="f">职责 responsibilities（顿号分隔）</label>
+      <input type="text" id="id-resp" placeholder="检索资料、写调研笔记">
+      <div class="grp">工具白名单 tools_allow</div>
+      <div id="id-tools" class="tool-grid"></div>
+      <label class="f">互聊轮数上限 budget_turns：<b id="id-turns-v">6</b></label>
+      <input type="range" id="id-turns" min="1" max="12" value="6">
+      <div class="row" style="margin-top:10px;gap:8px;">
+        <button class="btn primary" id="btn-save-id" style="margin-top:0;width:auto;flex:1;">保存</button>
+        <button class="btn danger-full" id="btn-del-id" style="margin-top:0;width:auto;flex:1;">删除</button>
+      </div>
+      <div class="hint">保存后可在「房间 → 成员」为 Agent 换绑；编辑器按 s5 字段化冻结，YAML 导入导出随第 3 步开放。</div>
+    </div>
+
+    <!-- 模型面板 -->
+    <div class="pane" id="p-model">
+      <div class="grp">LLM · OpenAI 兼容端点</div>
+      <label class="f">Base URL</label>
+      <input type="text" id="llm-url" placeholder="https://api.example.com/v1">
+      <label class="f">API Key</label>
+      <input type="password" id="llm-key" placeholder="sk-...">
+      <label class="f">模型名</label>
+      <input type="text" id="llm-model" placeholder="gpt-4o-mini / deepseek-chat …">
+      <button class="btn primary" id="btn-save-llm">保存并连接</button>
+      <div class="hint">密钥仅存服务端进程内存，前端零持久化；V2 迁移到加密存储与多模型插槽。</div>
+    </div>
+
+    <!-- 记忆面板 -->
+    <div class="pane" id="p-memory">
+      <div class="grp">向量记忆库（MVP 第 4 步接入）</div>
+      <div class="hint">规划：房间级公共记忆 + Agent 私有记忆隔离存储于本地 Chroma/Qdrant，任务验收后沉淀结论，检索注入上下文。</div>
+    </div>
+
+    <div class="composer">
+      <textarea id="draft" placeholder="输入消息，Enter 发送；输入 @ 弹出成员选择…"></textarea>
+      <div id="mention-pop" class="mention-pop"></div>
+      <div class="row">
+        <button class="send" id="btn-send">发 送</button>
+        <span class="tip" id="scope-tip">广播模式：全体 Agent 可见可回</span>
+      </div>
+    </div>
+  </aside>
+
+  <main>
+    <div class="topbar">
+      <button class="burger" id="btn-burger" title="折叠/展开左侧栏">☰</button>
+      <span class="room-name">主房间</span>
+      <span class="chip" id="ws-chip">● 连接中…</span>
+      <span class="spacer"></span>
+      <span class="chip" id="llm-chip">LLM 未配置</span>
+    </div>
+    <div class="feed" id="feed"></div>
+    <div class="typing" id="typing">Agent A 正在输入…</div>
+    <div class="bottom-panel">
+      <div class="bp-tabs">
+        <div class="bp-tab on" data-bp="bp-files">文件工作区</div>
+        <div class="bp-tab" data-bp="bp-task">任务进度</div>
+        <div class="bp-tab" data-bp="bp-replay">事件回放</div>
+      </div>
+      <div class="bp-body on" id="bp-files">MVP 第 4 步接入：上传/预览/Agent 经 MCP 工具读写，版本乐观锁防冲突。</div>
+      <div class="bp-body" id="bp-task">MVP 第 5 步接入：CEO 拆目标 → 排产单 → 验收闭环的进度视图。</div>
+      <div class="bp-body" id="bp-replay">一切皆消息（append-only），此处将提供按任务回放与审计。</div>
+    </div>
+  </main>
+
+  <!-- 添加外部成员弹窗 -->
+  <div class="modal-mask" id="modal-mask">
+    <div class="modal">
+      <div id="modal-form">
+        <h3>添加外部成员</h3>
+        <label class="f">成员名称（如：TRAE·开发员）</label>
+        <input type="text" id="ext-name" placeholder="TRAE·开发员">
+        <label class="f">绑定身份卡（可稍后换绑）</label>
+        <select id="ext-identity" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
+          <option value="">— 暂不绑定 —</option>
+        </select>
+        <button class="btn primary" id="btn-ext-create">创建并发放令牌</button>
+        <button class="btn" id="btn-ext-cancel" style="width:100%;margin-top:8px;background:var(--bg);color:var(--muted);">取消</button>
+      </div>
+      <div id="modal-result" style="display:none;">
+        <h3>✅ 成员已创建 · 令牌仅显示这一次</h3>
+        <div class="hint">ROOM_TOKEN（重发将使旧令牌失效）：</div>
+        <div class="token-box" id="ext-token"></div>
+        <div class="hint">ZCode 接入（<code>.zcode/config.json</code> → mcp.servers）：</div>
+        <textarea id="cfg-zcode" readonly></textarea>
+        <div class="hint">TRAE 接入（stdio 桥命令）：</div>
+        <textarea id="cfg-trae" readonly></textarea>
+        <div class="row" style="display:flex;gap:8px;margin-top:12px;">
+          <button class="btn primary" id="btn-copy-all" style="margin-top:0;flex:1;">📋 复制全部配置</button>
+          <button class="btn" id="btn-ext-done" style="margin-top:0;flex:1;background:var(--bg);color:var(--muted);">完成</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+node_modules/
+backend/.venv/
+backend/agent_room.db
+backend/__pycache__/
+backend/**/__pycache__/
+backend/tests/__pycache__/
+src-tauri/target/
+tauri-dev.log
+*.pyc
