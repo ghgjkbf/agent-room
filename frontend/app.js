@@ -67,6 +67,7 @@ function handleMessage(msg) {
   clearTimeout(handleMessage._t);
 
   if (msg.type === 'system') { finalizeStreaming(); addBubble(msg); return; }
+  if (msg.type === 'deliver') { finalizeStreaming(); addDeliverBubble(msg); refreshFiles(); return; }
   if (!(msg.type === 'chat' && msg.sender.kind === 'agent' && msg.payload.text)) {
     finalizeStreaming();
     addBubble(msg);
@@ -79,12 +80,45 @@ function handleMessage(msg) {
   handleMessage._t = setTimeout(() => { $('typing').style.display = 'none'; }, 500);
 }
 
+/* deliver 消息：渲染成可点击附件样式（点击预览工作区文件） */
+function addDeliverBubble(msg) {
+  const el = addBubble(msg);
+  el.classList.add('deliver');
+  const m = (msg.payload.text || '').match(/([^\s（(]+)\s*（?v(\d+)/);
+  if (m) {
+    const path = m[1];
+    const link = document.createElement('span');
+    link.className = 'deliver-file';
+    link.textContent = '📎 ' + path;
+    link.title = '点击在文件面板预览';
+    link.addEventListener('click', () => {
+      document.querySelector('.bp-tab[data-bp="bp-files"]').click();
+      previewFile(path);
+    });
+    el.appendChild(link);
+  }
+}
+
+/* 工具调用事件（不落库的广播）：在活跃气泡下附一行小字 */
+function showToolEvent(msg) {
+  const st = streaming[msg.sender.id];
+  if (!st || !document.body.contains(st.el)) return;
+  let note = st.el.querySelector('.tool-note');
+  if (!note) {
+    note = document.createElement('div');
+    note.className = 'tool-note';
+    st.el.appendChild(note);
+  }
+  note.textContent = `🔧 ${msg.tool_event.name} ${msg.tool_event.result_ok ? '✓' : '✗'}`;
+}
+
 /* ---------- WS ---------- */
 function connect() {
   ws = new WebSocket('ws://' + location.host + '/ws/default');
   ws.onopen = () => setChip('● 已连接', '#10b981');
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
+    if (msg.tool_event) { showToolEvent(msg); return; }  // 工具调用事件，不进消息流
     handleMessage(msg);
     if (msg.type === 'system') refreshMembers(); // 熔断等系统事件后刷新轮数
   };
@@ -343,12 +377,98 @@ $('btn-copy-all').addEventListener('click', async () => {
   alertSys('已复制令牌与两段接入配置。');
 });
 
+/* ---------- 文件工作区（第 4 步） ---------- */
+let files = [];          // [{path, version, author, updated_at}]
+let previewedFile = null; // {path, version} 当前预览的文件
+
+async function refreshFiles() {
+  const res = await fetch('/api/files?room_id=default');
+  if (!res.ok) return;
+  files = await res.json();
+  const tree = {};
+  files.forEach(f => tree[f.path] = f);
+  const paths = Object.keys(tree).sort();
+  $('file-tree').innerHTML = paths.length ? paths.map(p => {
+    const f = tree[p];
+    const dir = p.includes('/') ? p.slice(0, p.lastIndexOf('/') + 1) : '';
+    const name = p.slice(dir.length);
+    return `<div class="file-row" data-path="${p}">
+      <span class="file-name" title="${p}">📄 ${dir ? `<span class="file-dir">${dir}</span>` : ''}${name}</span>
+      <span class="file-ver">v${f.version}</span>
+      <span class="file-author ${f.author === 'human' ? 'hum' : ''}">${f.author === 'human' ? '👤' : '🤖'}${f.author === 'human' ? '人类' : f.author}</span>
+      <button class="file-del" data-path="${p}" title="删除">✕</button>
+    </div>`;
+  }).join('') : '<div class="hint">（暂无文件；Agent 交付物与人类上传都会出现在这里）</div>';
+
+  $('file-tree').querySelectorAll('.file-name').forEach(el =>
+    el.addEventListener('click', () => previewFile(el.closest('.file-row').dataset.path)));
+  $('file-tree').querySelectorAll('.file-del').forEach(el =>
+    el.addEventListener('click', async () => {
+      const p = el.dataset.path;
+      if (!confirm(`删除文件 ${p}？`)) return;
+      await fetch('/api/files', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ room_id: 'default', path: p }),
+      });
+      if (previewedFile && previewedFile.path === p) { previewedFile = null; $('file-preview').value = ''; $('file-preview-head').textContent = '点文件名预览'; }
+      refreshFiles();
+    }));
+  $('file-count').textContent = files.length;
+}
+
+async function previewFile(path) {
+  const res = await fetch('/api/files/content?room_id=default&path=' + encodeURIComponent(path));
+  if (!res.ok) return alertSys((await res.json()).detail || '读取失败');
+  const d = await res.json();
+  previewedFile = { path: d.path, version: d.version };
+  $('file-preview').value = d.content;
+  $('file-preview-head').textContent = `${d.path} · v${d.version} · 作者 ${d.author}`;
+}
+
+$('btn-upload').addEventListener('click', () => $('file-input').click());
+$('file-input').addEventListener('change', async () => {
+  const f = $('file-input').files[0];
+  if (!f) return;
+  const fd = new FormData();
+  fd.append('file', f);
+  const r = await fetch('/api/files/upload?room_id=default', { method: 'POST', body: fd });
+  if (!r.ok) return alertSys('上传失败：' + ((await r.json()).detail || r.status));
+  const d = await r.json();
+  alertSys(`已上传 ${d.path}（v${d.version}）`);
+  $('file-input').value = '';
+  refreshFiles();
+});
+$('btn-save-preview').addEventListener('click', async () => {
+  if (!previewedFile) return alertSys('请先点文件名选择要编辑的文件');
+  const r = await fetch('/api/files/write', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      room_id: 'default', path: previewedFile.path,
+      content: $('file-preview').value, base_version: previewedFile.version,
+    }),
+  });
+  if (!r.ok) {
+    const d = await r.json();
+    if (d.detail && d.detail.latest_version !== undefined) {
+      alertSys(`版本冲突：当前已是 v${d.detail.latest_version}，已为你刷新内容，请重新保存。`);
+      previewFile(previewedFile.path); refreshFiles();
+    } else alertSys('保存失败：' + (d.detail || JSON.stringify(d)));
+    return;
+  }
+  const d = await r.json();
+  alertSys(`已保存 ${d.path}（v${d.version}）`);
+  previewedFile.version = d.version;
+  $('file-preview-head').textContent = `${d.path} · v${d.version} · 作者 你`;
+  refreshFiles();
+});
+
 /* ---------- 启动 ---------- */
 async function boot() {
   const data = await (await fetch('/api/room/default')).json();
   $('llm-chip').textContent = data.llm_ready ? 'LLM 已配置' : 'LLM 未配置';
   await refreshIdentities();
   await refreshMembers();
+  await refreshFiles();
   connect();
   (data.history || []).forEach(m => handleMessage(m));
 }

@@ -20,6 +20,10 @@ class RoomBus:
     def __init__(self, room_id: str):
         self.room_id = room_id
         self.subscribers: dict[str, WebSocket] = {}  # client_id -> ws
+        # 回指注册表：responder 工具执行后发 deliver 时按 room_id 取总线
+        from app.rooms.bus import BusRegistry
+
+        self.registry_ref = BusRegistry
 
     async def join(self, client_id: str, ws: WebSocket):
         await ws.accept()

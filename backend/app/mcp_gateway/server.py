@@ -14,6 +14,7 @@ from mcp.server.mcpserver import MCPServer
 
 from app.core.db import db
 from app.core.message import Message
+from app.files.tools import exec_fs_tool
 
 # 群规（join_room 返回值内嵌，Agent 进群即读到使用约定；ClawSwarm cs-chat 技能同思路）
 HOUSE_RULES = """【房间使用约定】
@@ -21,7 +22,18 @@ HOUSE_RULES = """【房间使用约定】
 2. 发言用 send_message(text=...)；交付成果用 send_message(type="deliver")。消息全体可见，@某人写 mentions=["agent_id"]。
 3. 广播消息不要求内置 Agent 回应；想请某位内置成员发言，请显式 @ 其 agent_id。
 4. 收到 priority=0 的 system 消息（P0 interrupt）时，立即停止当前动作并回一条确认。
-5. 你的 agent_id 与身份卡已绑定，发言请遵守身份卡职责；离线前用 declare_status(status="offline") 告别。"""
+5. 你的 agent_id 与身份卡已绑定，发言请遵守身份卡职责；离线前用 declare_status(status="offline") 告别。
+6. 文件读写用 fs.list / fs.read / fs.write：交付物一律 fs.write 落工作区（覆盖已有文件必须传你最近一次读到的 version 作 base_version，冲突时重读重写），写成功后可 send_message(type="deliver") 附一句说明。"""
+
+def _agent_tools_allow(agent_id: str) -> list[str]:
+    """该外部成员绑定身份卡的工具白名单（未绑卡 = 空 = 无 fs 工具）。"""
+    with db() as conn:
+        row = conn.execute(
+            "SELECT i.tools_allow FROM agents a JOIN identities i ON i.id=a.identity_id"
+            " WHERE a.id=?",
+            (agent_id,),
+        ).fetchone()
+    return json.loads(row["tools_allow"] or "[]") if row else []
 
 
 def hash_token(token: str) -> str:
@@ -108,6 +120,7 @@ def build_mcp_server(bus_registry) -> MCPServer:
                 "agent_id": agent_id,
                 "name": agent["name"],
                 "room_id": room_id,
+                "tools_allow": _agent_tools_allow(agent_id),
                 "rules": HOUSE_RULES,
             }, ensure_ascii=False)
         except Exception as e:
@@ -198,6 +211,54 @@ def build_mcp_server(bus_registry) -> MCPServer:
                     "UPDATE agents SET status=? WHERE id=?", (status, agent_id)
                 )
             return json.dumps({"ok": True, "status": status}, ensure_ascii=False)
+        except Exception as e:
+            return _err(e)
+
+    # ---- 文件工作区（第 4 步）：fs.* 经 MCP 对外暴露，按身份卡 tools_allow 过滤 ----
+
+    def _fs_guard(agent_id: str, token: str, tool: str) -> dict:
+        """双因子 + 白名单双重校验；白名单在工具定义层（list_tools）已过滤，
+        此处防直接 call_tool 越权。返回 agents 行。"""
+        agent = authenticate(agent_id, token)
+        if tool not in _agent_tools_allow(agent_id):
+            raise PermissionError(f"工具 {tool} 不在该成员身份卡的白名单内")
+        return agent
+
+    @srv.tool()
+    async def fs_list(agent_id: str, token: str) -> str:
+        """列出房间文件工作区的全部文件（路径 / 版本 / 作者）。"""
+        try:
+            agent = _fs_guard(agent_id, token, "fs.list")
+            result = await exec_fs_tool(agent["room_id"], agent_id, "fs.list", {})
+            return result
+        except Exception as e:
+            return _err(e)
+
+    @srv.tool()
+    async def fs_read(agent_id: str, token: str, path: str) -> str:
+        """读取工作区文件内容与版本号。path 为相对路径（如 docs/方案.md）。"""
+        try:
+            agent = _fs_guard(agent_id, token, "fs.read")
+            result = await exec_fs_tool(agent["room_id"], agent_id, "fs.read",
+                                        {"path": path})
+            return result
+        except Exception as e:
+            return _err(e)
+
+    @srv.tool()
+    async def fs_write(agent_id: str, token: str, path: str, content: str,
+                       base_version: int | None = None) -> str:
+        """写文件到工作区（整体覆盖）。新建省略 base_version；覆盖已有文件必须传
+        最近一次读到的 version 作 base_version，冲突时重读后重写。写成功自动发
+        deliver 消息进群。"""
+        try:
+            agent = _fs_guard(agent_id, token, "fs.write")
+            result = await exec_fs_tool(
+                agent["room_id"], agent_id, "fs.write",
+                {"path": path, "content": content, "base_version": base_version},
+                bus_registry,
+            )
+            return result
         except Exception as e:
             return _err(e)
 

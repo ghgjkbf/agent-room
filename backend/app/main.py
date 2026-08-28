@@ -16,13 +16,15 @@ from app.agents.responder import GenerationRegistry, plan_replies, respond_agent
 from app.core.config import BASE_DIR, settings
 from app.core.db import db
 from app.core.message import Message
+from app.files import routes as file_routes
 from app.identities import routes as identity_routes
 from app.mcp_gateway.server import mount_gateway
 from app.rooms.bus import BusRegistry
 
-app = FastAPI(title="agent-room", version="0.3.0")
+app = FastAPI(title="agent-room", version="0.4.0")
 app.include_router(identity_routes.router)
 app.include_router(agent_routes.router)
+app.include_router(file_routes.router)
 mount_gateway(app, BusRegistry)
 
 

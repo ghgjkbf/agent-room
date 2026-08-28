@@ -5,6 +5,9 @@
 - 身份卡 persona/responsibilities 注入 system prompt；单 Agent 互聊
   轮数超 budget_turns 由总线发 system 熔断消息并 @人类。
 - 生成句柄登记到 GenerationRegistry，P0 interrupt 可 cancel 当前流式生成。
+- 第 4 步：stream_text → run_turn 工具循环（OpenAI Function Calling）——
+  stream 中 tool_calls → 执行 → 回灌 → 直至纯文本回复；工具按身份卡
+  tools_allow 严格过滤；LLM 未配置时占位路径原样保留。
 """
 
 import asyncio
@@ -16,9 +19,12 @@ from openai import AsyncOpenAI
 from app.core.config import settings
 from app.core.db import db
 from app.core.message import Message
+from app.files.tools import exec_fs_tool, filter_tools
 
 # 单条分段推送的最大字符数，模拟流式节奏（真实 LLM 时逐 token 分段）
 CHUNK_SIZE = 24
+# 工具循环上限（防失控；身份卡 budget_turns 是互聊熔断，与此独立）
+MAX_TOOL_ROUNDS = 8
 
 
 class GenerationRegistry:
@@ -53,6 +59,7 @@ def load_identity(agent_id: str) -> dict | None:
         "label": row["label"],
         "persona": row["persona"] or "",
         "responsibilities": json.loads(row["responsibilities"] or "[]"),
+        "tools_allow": json.loads(row["tools_allow"] or "[]"),
     }
 
 
@@ -77,41 +84,115 @@ def reset_turns():
         conn.execute("UPDATE agents SET chat_turns = 0")
 
 
-async def stream_text(agent_id: str, identity: dict | None, user_text: str):
-    """产出文本片段。LLM 未配置时降级为本地占位（逐片 yield）。"""
-    if settings.llm_base_url and settings.llm_api_key and settings.llm_model:
-        client = AsyncOpenAI(base_url=settings.llm_base_url, api_key=settings.llm_api_key)
-        sys_parts = ["你是群聊房间里的 AI 助手，简洁回答，遵守身份卡职责。"]
-        if identity:
-            role = f"你的标签是「{identity['label']}」"
-            if identity["persona"]:
-                role += f"；风格：{identity['persona']}"
-            resp = identity.get("responsibilities") or []
-            if resp:
-                role += "；职责：" + "、".join(resp)
-            sys_parts.append(role + "。只回答与身份相关的问题，越界时简短说明并引导提问者换人。")
-        else:
-            sys_parts.append(f"你是 {agent_id}，未绑定身份卡。")
-        stream = await client.chat.completions.create(
-            model=settings.llm_model,
-            messages=[{"role": "system", "content": "\n".join(sys_parts)},
-                      {"role": "user", "content": user_text}],
-            stream=True,
-        )
-        async for chunk in stream:
-            delta = chunk.choices[0].delta.content
-            if delta:
-                yield delta
-        return
+def build_system_prompt(agent_id: str, identity: dict | None) -> str:
+    sys_parts = ["你是群聊房间里的 AI 助手，简洁回答，遵守身份卡职责。"]
+    if identity:
+        role = f"你的标签是「{identity['label']}」"
+        if identity["persona"]:
+            role += f"；风格：{identity['persona']}"
+        resp = identity.get("responsibilities") or []
+        if resp:
+            role += "；职责：" + "、".join(resp)
+        sys_parts.append(role + "。只回答与身份相关的问题，越界时简短说明并引导提问者换人。")
+    else:
+        sys_parts.append(f"你是 {agent_id}，未绑定身份卡。")
+    return "\n".join(sys_parts)
+
+
+def placeholder_text(agent_id: str, identity: dict | None, user_text: str) -> str:
     name = identity["label"] if identity else agent_id
-    text = (
+    return (
         f"[{name}·占位] 已收到：「{user_text}」。"
         + (f"我按「{identity['label']}」的职责行事。" if identity else "我尚未绑定身份卡。")
         + "（可在左侧「模型设置」接入真实 LLM）"
     )
-    for i in range(0, len(text), CHUNK_SIZE):
-        await asyncio.sleep(0.35)
-        yield text[i : i + CHUNK_SIZE]
+
+
+async def run_turn(agent_id: str, identity: dict | None, user_text: str,
+                   bus_registry=None, room_id: str = "default"):
+    """一个完整对话轮：产出文本片段；流中携带工具调用时执行工具并回灌，
+    循环直至纯文本回复。
+
+    产出协议：
+      ("tool", {name, args, result})  —— 工具调用事件（前端可展示）
+      ("text", piece)                 —— 文本片段
+    LLM 未配置时降级为本地占位（逐片 yield），与第 2 步行为一致。
+    """
+    if not (settings.llm_base_url and settings.llm_api_key and settings.llm_model):
+        for piece in _split(placeholder_text(agent_id, identity, user_text)):
+            await asyncio.sleep(0.35)
+            yield "text", piece
+        return
+
+    client = AsyncOpenAI(base_url=settings.llm_base_url, api_key=settings.llm_api_key)
+    tools = filter_tools(identity.get("tools_allow") if identity else None)
+    messages = [
+        {"role": "system", "content": build_system_prompt(agent_id, identity)},
+        {"role": "user", "content": user_text},
+    ]
+
+    for _round in range(MAX_TOOL_ROUNDS):
+        stream = await client.chat.completions.create(
+            model=settings.llm_model,
+            messages=messages,
+            tools=tools or None,
+            stream=True,
+        )
+        content_parts: list[str] = []
+        tool_calls: dict[int, dict] = {}  # index -> {id, name, args_json}
+        async for chunk in stream:
+            delta = chunk.choices[0].delta if chunk.choices else None
+            if delta is None:
+                continue
+            if delta.content:
+                content_parts.append(delta.content)
+                yield "text", delta.content
+            for tc in (delta.tool_calls or []):
+                slot = tool_calls.setdefault(tc.index, {"id": "", "name": "", "args": ""})
+                if tc.id:
+                    slot["id"] = tc.id
+                if tc.function:
+                    if tc.function.name:
+                        slot["name"] += tc.function.name
+                    if tc.function.arguments:
+                        slot["args"] += tc.function.arguments
+
+        text = "".join(content_parts)
+        if not tool_calls:
+            return  # 纯文本回复，本轮结束
+
+        # 工具调用：执行 → 回灌 assistant(tool_calls) + tool 消息，继续下一轮
+        assistant_msg = {"role": "assistant", "content": text or None}
+        assistant_msg["tool_calls"] = [
+            {
+                "id": slot["id"] or f"call_{i}",
+                "type": "function",
+                "function": {"name": slot["name"], "arguments": slot["args"] or "{}"},
+            }
+            for i, slot in sorted(tool_calls.items())
+        ]
+        messages.append(assistant_msg)
+        for i, slot in sorted(tool_calls.items()):
+            name = slot["name"]
+            try:
+                args = json.loads(slot["args"] or "{}")
+            except json.JSONDecodeError:
+                args = {}
+            # 防越权：即便模型幻觉出白名单外的工具，执行器侧仍复核
+            allowed = {t["function"]["name"] for t in tools}
+            if name not in allowed:
+                result = json.dumps({"ok": False, "error": f"工具 {name} 不在你的白名单内"},
+                                    ensure_ascii=False)
+            else:
+                result = await exec_fs_tool(room_id, agent_id, name, args, bus_registry)
+            yield "tool", {"name": name, "args": args, "result": result}
+            messages.append({
+                "role": "tool",
+                "tool_call_id": slot["id"] or f"call_{i}",
+                "content": result,
+            })
+
+    yield "text", "\n（工具调用轮数已达上限，停止执行。已产出的内容如需落文件，请让用户重新发起。）"
 
 
 def _split(text: str):
@@ -125,6 +206,7 @@ async def respond_agent(bus, msg: Message, agent: dict):
     片段协议：同一 msg_id + stream_seq 递增，尾片 is_final=True。
     落库策略：只把首条消息存入事件流（payload 存最终全文），后续片段仅广播
     不落库——历史回放时读 full_text 即得完整原文，且消息表不再碎片化。
+    工具调用事件（"tool"）仅广播展示，不进 chat 文本，也不落库。
     """
     aid = agent["id"]
     try:
@@ -132,7 +214,26 @@ async def respond_agent(bus, msg: Message, agent: dict):
         reply_id = str(uuid.uuid4())
         got_llm = bool(settings.llm_base_url and settings.llm_api_key and settings.llm_model)
         pieces = []
-        async for piece in stream_text(aid, identity, msg.payload_text):
+        tool_notes = []
+        async for kind, item in run_turn(aid, identity, msg.payload_text,
+                                         bus_registry=bus.registry_ref,
+                                         room_id=bus.room_id):
+            if kind == "tool":
+                # 工具事件：纯广播（前端在气泡下附一行小字，不落库不进全文）
+                tool_notes.append(f"🔧 {item['name']}")
+                ev = Message(
+                    room_id=bus.room_id, type="chat", sender_kind="agent",
+                    sender_id=aid, payload_text="",
+                    stream_seq=len(pieces), is_final=False, msg_id=reply_id,
+                )
+                ev_dict = ev.to_dict()
+                ev_dict["tool_event"] = {
+                    "name": item["name"],
+                    "result_ok": _result_ok(item["result"]),
+                }
+                await bus.broadcast_raw(json.dumps(ev_dict, ensure_ascii=False))
+                continue
+            piece = item
             pieces.append(piece)
             seq = len(pieces) - 1  # 0,1,2...；0 为首片
             if seq == 0:
@@ -168,11 +269,15 @@ async def respond_agent(bus, msg: Message, agent: dict):
                 (final_text, final_text, reply_id),
             )
         # 终止信号：前端用它判断该 Agent 本次流式结束（payload 可为空）
-        await bus.broadcast_raw(json.dumps(Message(
+        final = Message(
             room_id=bus.room_id, type="chat", sender_kind="agent",
             sender_id=aid, payload_text="",
             stream_seq=len(pieces), is_final=True, msg_id=reply_id,
-        ).to_dict(), ensure_ascii=False))
+        )
+        final_dict = final.to_dict()
+        if tool_notes:
+            final_dict["tool_summary"] = tool_notes
+        await bus.broadcast_raw(json.dumps(final_dict, ensure_ascii=False))
         remaining = bump_turns(aid)
         if remaining <= 0 and identity:
             label = identity["label"]
@@ -207,6 +312,13 @@ async def respond_agent(bus, msg: Message, agent: dict):
             sender_kind="system", sender_id="bus",
             payload_text=f"{aid} 回复失败：{type(e).__name__}: {e}",
         ))
+
+
+def _result_ok(result_text: str) -> bool:
+    try:
+        return bool(json.loads(result_text).get("ok"))
+    except Exception:
+        return False
 
 
 def plan_replies(msg: Message, online_agents: list[dict]) -> list[dict]:

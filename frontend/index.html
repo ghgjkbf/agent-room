@@ -93,6 +93,41 @@
   .bp-body{flex:1;overflow-y:auto;padding:12px 18px;font-size:12.5px;color:var(--muted);display:none;}
   .bp-body.on{display:block;}
 
+  /* 文件工作区（第 4 步） */
+  .files-wrap{display:flex;gap:14px;height:100%;}
+  .files-left{width:46%;min-width:260px;display:flex;flex-direction:column;}
+  .files-right{flex:1;display:flex;flex-direction:column;min-width:0;}
+  .files-head{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink);
+    padding-bottom:6px;border-bottom:1px solid var(--line);margin-bottom:6px;}
+  .files-head .spacer{flex:1;}
+  .mini-btn{border:1px solid var(--line);background:#fff;border-radius:7px;font-size:11px;
+    padding:3px 9px;cursor:pointer;color:var(--muted);font-family:inherit;}
+  .mini-btn:hover{border-color:var(--brand);color:var(--brand-ink);}
+  .file-tree{flex:1;overflow-y:auto;}
+  .file-row{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:7px;font-size:12.5px;}
+  .file-row:hover{background:var(--bg);}
+  .file-name{cursor:pointer;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .file-name:hover{color:var(--brand-ink);text-decoration:underline;}
+  .file-dir{color:var(--muted);font-size:11px;}
+  .file-ver{flex:none;font-size:10.5px;background:var(--brand-soft);color:var(--brand-ink);
+    padding:0 7px;border-radius:999px;}
+  .file-author{flex:none;font-size:10.5px;color:var(--muted);max-width:110px;overflow:hidden;
+    text-overflow:ellipsis;white-space:nowrap;}
+  .file-author.hum{color:var(--accent);}
+  .file-del{flex:none;border:none;background:none;color:#d1d5db;cursor:pointer;font-size:11px;
+    padding:1px 4px;border-radius:5px;}
+  .file-del:hover{color:var(--danger);background:#fef3f2;}
+  #file-preview{flex:1;resize:none;border:1px solid var(--line);border-radius:9px;padding:9px 11px;
+    font-size:12px;font-family:Consolas,monospace;background:#fafafc;line-height:1.55;}
+  #file-preview:focus{outline:2px solid var(--brand-soft);border-color:var(--brand);}
+  .msg.deliver{border-color:#a7f3d0;background:#f0fdf4;}
+  .deliver-file{display:inline-flex;align-items:center;gap:4px;margin-top:5px;padding:3px 10px;
+    background:#fff;border:1px solid #a7f3d0;border-radius:8px;font-size:12px;cursor:pointer;
+    color:#047857;}
+  .deliver-file:hover{background:#ecfdf5;text-decoration:underline;}
+  .tool-note{margin-top:4px;font-size:10.5px;color:var(--muted);background:var(--bg);
+    border-radius:6px;padding:1px 8px;display:inline-block;}
+
   /* 身份卡编辑器 */
   .tool-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:6px;}
   .tool-grid label{font-size:12px;color:var(--ink);display:flex;align-items:center;gap:6px;}
@@ -233,7 +268,27 @@
         <div class="bp-tab" data-bp="bp-task">任务进度</div>
         <div class="bp-tab" data-bp="bp-replay">事件回放</div>
       </div>
-      <div class="bp-body on" id="bp-files">MVP 第 4 步接入：上传/预览/Agent 经 MCP 工具读写，版本乐观锁防冲突。</div>
+      <div class="bp-body on" id="bp-files">
+        <div class="files-wrap">
+          <div class="files-left">
+            <div class="files-head">
+              <span>文件工作区 · <b id="file-count">0</b></span>
+              <span class="spacer"></span>
+              <button class="mini-btn" id="btn-upload">⬆ 上传</button>
+              <input type="file" id="file-input" style="display:none;">
+            </div>
+            <div id="file-tree" class="file-tree"></div>
+          </div>
+          <div class="files-right">
+            <div class="files-head">
+              <span id="file-preview-head">点文件名预览</span>
+              <span class="spacer"></span>
+              <button class="mini-btn" id="btn-save-preview">💾 保存</button>
+            </div>
+            <textarea id="file-preview" placeholder="文件内容预览与编辑（保存走乐观锁，冲突会提示刷新）"></textarea>
+          </div>
+        </div>
+      </div>
       <div class="bp-body" id="bp-task">MVP 第 5 步接入：CEO 拆目标 → 排产单 → 验收闭环的进度视图。</div>
       <div class="bp-body" id="bp-replay">一切皆消息（append-only），此处将提供按任务回放与审计。</div>
     </div>

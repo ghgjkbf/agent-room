@@ -71,6 +71,16 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, id);
+CREATE TABLE IF NOT EXISTS files (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL,
+  path TEXT NOT NULL,
+  version INTEGER NOT NULL DEFAULT 1,
+  author_agent TEXT NOT NULL,
+  manifest_json TEXT DEFAULT '{}',
+  updated_at TEXT NOT NULL,
+  UNIQUE(room_id, path)
+);
 """
 
 # 迁移后 messages 新增列：完整文本聚合列 + 分片序号/终止标记（协议扩展，旧库自动补）
@@ -118,6 +128,10 @@ def init_db():
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_client_dedup"
             " ON messages(room_id, sender_id, client_msg_id)"
             " WHERE client_msg_id IS NOT NULL"
+        )
+        # 第 4 步文件工作区：files 表（旧库由 CREATE TABLE IF NOT EXISTS 兜底）
+        conn.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_files_room_path ON files(room_id, path)"
         )
         _migrate_messages(conn)
 
