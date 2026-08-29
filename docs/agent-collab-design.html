@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多Agent群聊协作系统 · 技术设计文档</title>
+<style>
+  :root{
+    --ink:#1b1b1f; --muted:#5c5c66; --line:#e6e6ec; --bg:#f6f6f8;
+    --card:#ffffff; --brand:#4b3fe3; --brand-soft:#f2f0ff; --brand-ink:#2a2380;
+    --accent:#0f766e; --warn:#b45309; --danger:#b42318;
+    --radius:12px;
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{
+    font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    color:var(--ink); background:var(--bg); line-height:1.75;
+  }
+  .page{max-width:960px; margin:0 auto; padding:48px 24px 96px;}
+  header.doc-head{
+    background:linear-gradient(135deg,#1a1759,#4b3fe3);
+    color:#fff; border-radius:16px; padding:40px 44px; margin-bottom:32px;
+  }
+  header.doc-head h1{font-size:28px; letter-spacing:.5px; margin-bottom:10px;}
+  header.doc-head p{opacity:.85; font-size:14px;}
+  .meta-row{display:flex; gap:20px; flex-wrap:wrap; margin-top:18px; font-size:13px;}
+  .meta-row span{background:rgba(255,255,255,.14); padding:4px 14px; border-radius:999px;}
+  section{background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+    padding:32px 36px; margin-bottom:24px;}
+  h2{font-size:20px; color:var(--brand-ink); padding-bottom:10px; border-bottom:2px solid var(--brand-soft);
+    margin-bottom:18px; display:flex; align-items:center; gap:10px;}
+  h2 .no{display:inline-flex; width:28px; height:28px; border-radius:8px; background:var(--brand);
+    color:#fff; font-size:14px; align-items:center; justify-content:center; flex:none;}
+  h3{font-size:16px; margin:22px 0 8px; color:var(--ink);}
+  p{margin:8px 0; font-size:14.5px;}
+  ul,ol{margin:8px 0 8px 22px; font-size:14.5px;}
+  li{margin:4px 0;}
+  table{width:100%; border-collapse:collapse; margin:14px 0; font-size:13.5px;}
+  th{background:var(--brand-soft); color:var(--brand-ink); text-align:left;
+    padding:9px 12px; border:1px solid var(--line); font-weight:600;}
+  td{padding:9px 12px; border:1px solid var(--line); vertical-align:top;}
+  tr:nth-child(even) td{background:#fafafc;}
+  code{font-family:"JetBrains Mono",Consolas,monospace; font-size:12.5px;
+    background:#f0f0f5; padding:1px 6px; border-radius:5px; color:#333;}
+  pre{background:#17171c; color:#e8e8ee; border-radius:10px; padding:18px 20px;
+    overflow-x:auto; margin:14px 0; font-size:12.5px; line-height:1.6;}
+  pre code{background:none; color:inherit; padding:0;}
+  .callout{border-left:4px solid var(--brand); background:var(--brand-soft);
+    border-radius:0 10px 10px 0; padding:14px 18px; margin:14px 0; font-size:14px;}
+  .callout.warn{border-color:var(--warn); background:#fef6ec;}
+  .callout.danger{border-color:var(--danger); background:#fef3f2;}
+  .callout.ok{border-color:var(--accent); background:#ecfdf9;}
+  .tag{display:inline-block; font-size:12px; padding:1px 10px; border-radius:999px;
+    background:var(--brand-soft); color:var(--brand-ink); margin-right:6px; font-weight:500;}
+  .toc{columns:2; column-gap:40px; font-size:14px;}
+  .toc li{list-style:none; margin:6px 0;}
+  .toc a{color:var(--brand-ink); text-decoration:none;}
+  .toc a:hover{text-decoration:underline;}
+  .kbd{border:1px solid var(--line); border-bottom-width:2px; border-radius:6px;
+    padding:0 7px; font-size:12.5px; background:#fafafc; font-family:inherit;}
+  .mermaid-note{font-size:12.5px; color:var(--muted);}
+  .flow-box{background:#fafafc; border:1px dashed var(--line); border-radius:10px;
+    padding:16px 20px; margin:14px 0; font-family:"JetBrains Mono",Consolas,monospace;
+    font-size:12.5px; white-space:pre-wrap; line-height:1.8;}
+  footer{color:var(--muted); font-size:12.5px; text-align:center; margin-top:40px;}
+</style>
+</head>
+<body>
+<div class="page">
+
+<header class="doc-head">
+  <h1>多Agent群聊协作系统 · 技术设计文档</h1>
+  <p>桌面程序 × 群聊外壳 × 多Agent协作内核 × 用户自定义身份 × 人类最高优先级仲裁</p>
+  <div class="meta-row">
+    <span>版本 v1.2（决策已冻结）</span>
+    <span>状态：可开工</span>
+    <span>适用阶段：MVP → V2</span>
+  </div>
+</header>
+
+<section id="toc">
+  <h2><span class="no">目</span>目录</h2>
+  <ul class="toc">
+    <li><a href="#s1">1. 产品概述与设计目标</a></li>
+    <li><a href="#s2">2. 功能全景清单</a></li>
+    <li><a href="#s3">3. 系统总体架构</a></li>
+    <li><a href="#s4">4. 消息协议设计</a></li>
+    <li><a href="#s5">5. 用户自定义身份与标签体系</a></li>
+    <li><a href="#s6">6. 职位化自主编排</a></li>
+    <li><a href="#s7">7. 人类最高优先级机制</a></li>
+    <li><a href="#s8">8. 文件共享工作区</a></li>
+    <li><a href="#s9">9. 多方记忆与向量库</a></li>
+    <li><a href="#s10">10. 治理、安全与成本</a></li>
+    <li><a href="#s11">11. 数据表设计</a></li>
+    <li><a href="#s12">12. MVP 开发路线</a></li>
+    <li><a href="#s13">13. 风险与关键决策</a></li>
+    <li><a href="#s14">14. 本地 Agent 接入方案（TRAE / ZCode）</a></li>
+  </ul>
+</section>
+
+<section id="s1">
+  <h2><span class="no">1</span>产品概述与设计目标</h2>
+  <p>本系统是一个<strong>运行于本机的桌面程序</strong>，核心定位：为电脑上已有的 Agent（TRAE、ZCode 等）提供交流平台——让本机多个 Agent 像拉群一样进入同一个房间，互相交流、分工协同完成复杂工作。人类既是发起者与旁观者，也是最高仲裁者；文件保存在群内共享，命令同步广播给所有 Agent。</p>
+  <div class="callout">
+    <strong>产品定位（2026-08-27 修订）</strong>：软件的首要服务对象是<strong>电脑上的 Agent</strong>。内置 LLM Agent 是对话与编排的补充形态，外部本机 Agent（TRAE / ZCode）经接入网关进群才是一等公民——没有人类逐条驱动时，Agent 之间也能自主接活、互聊、交付。
+  </div>
+  <h3>核心设计目标</h3>
+  <ul>
+    <li><strong>同步收到</strong>：一条命令通过消息总线异步扇出，所有在线 Agent 同时收到任务与完整房间上下文——无论是内置 Agent 还是外部接入的本机 Agent。</li>
+    <li><strong>协同工作</strong>：Agent 按排产单分工执行，互聊走群内 @提及，过程对人类全程透明。</li>
+    <li><strong>身份可定义</strong>：用户自主为每个 Agent 制定身份（职责、工具权限、风格），获得身份的 Agent 在群内显示标签，并严格只执行身份对应部分的工作。内部 Agent 与外部 Agent 共用同一套身份卡体系。</li>
+    <li><strong>人类最高优先级</strong>：人类消息拥有绝对优先权——AI 陷入逻辑死锁时可立即出言阻止，需求偏差时可随时修正，排产单即刻作废重排。</li>
+    <li><strong>记忆可沉淀</strong>：向量库承载多方记忆，跨会话可检索，公共与私有记忆严格隔离。</li>
+    <li><strong>本机优先</strong>：程序、后端服务、向量库、记忆数据全部不出本机；外部 Agent 经本地网关接入，通信不走公网。</li>
+  </ul>
+  <div class="callout">
+    <strong>一句话原则</strong>：一切皆消息（append-only 事件流），人类拥有最高仲裁权，编排者不执行、执行者不编排。
+  </div>
+</section>
+
+<section id="s2">
+  <h2><span class="no">2</span>功能全景清单</h2>
+  <table>
+    <tr><th style="width:140px">维度</th><th>功能点</th></tr>
+    <tr><td><strong>桌面程序形态</strong></td><td>Tauri 2 窗口壳 · FastAPI sidecar 随程序启停 · 左侧全功能侧边栏 / 右侧工作台 · 双击启动免浏览器</td></tr>
+    <tr><td><strong>群聊与实时协作</strong></td><td>多人-多Agent同群 · 命令同步广播（WS异步扇出）· Agent互聊@提及 · 人类全程旁观</td></tr>
+    <tr><td><strong>文件与工作区</strong></td><td>群内上传保存 · Agent读写加工 · 版本乐观锁防冲突 · 按引用协作</td></tr>
+    <tr><td><strong>职位化编排</strong></td><td>CEO总编排拆目标 · 部门主管排产 · 排产单驱动互聊 · 自由@提及兜底</td></tr>
+    <tr><td><strong>身份与标签</strong></td><td>用户制定身份卡 · 群内显示身份标签 · 按身份执行对应部分 · 多Agent均可启用</td></tr>
+    <tr><td><strong>多方记忆</strong></td><td>向量库存多方记忆 · 房间级公共摘要 · Agent私有记忆隔离 · 检索注入上下文</td></tr>
+    <tr><td><strong>人类优先权</strong></td><td>interrupt最高优先级消息 · 中断/修正/终止三档语义 · 死锁熔断自动@人类</td></tr>
+    <tr><td><strong>治理与安全</strong></td><td>工具白名单按职位 · 文件域权限隔离 · 轮数+预算硬熔断 · 事件溯源可回放 · 成本仪表盘</td></tr>
+    <tr><td><strong>技术底座</strong></td><td>Tauri 2 桌面壳 · FastAPI 异步扇出（sidecar 进程）· WebSocket房间 · MCP工具层 · A2A协议预留 · 可插拔LLM</td></tr>
+    <tr><td><strong>本地 Agent 接入</strong></td><td>本机 Agent 为一等公民 · MCP网关 · HTTP API · 桥接守护进程（全自动唤醒）· 身份映射与权限继承 · 出入消息全量审计</td></tr>
+  </table>
+</section>
+
+<section id="s3">
+  <h2><span class="no">3</span>系统总体架构</h2>
+  <p>系统分四层：交互面、决策与编排、执行与产出、底座设施。一条实时消息总线贯穿所有参与者。整体形态为<strong>桌面程序（Tauri 2）+ 本地后端服务（FastAPI sidecar）</strong>。</p>
+  <div class="flow-box">用户（最高优先级仲裁者）
+   │ 下达目标 / interrupt 介入
+   ▼
+┌──────────────────────────────────────────────────────┐
+│ 桌面窗口 Tauri 2（WebView 加载 127.0.0.1:8899）         │
+│ ┌──────────────┐  ┌───────────────────────────────┐ │
+│ │ 左侧栏：交互与设置│  │ 右侧工作台                      │ │
+│ │ 房间/成员列表    │  │ 工具条（房间名·任务状态·预算水位· │ │
+│ │ Tab：身份卡编辑器│◀▶│ 停止全部/@修正）                 │ │
+│ │ ·LLM模型设置    │  │ 群聊消息流（身份标签·@高亮·       │ │
+│ │ ·记忆检索       │  │ interrupt标记）                │ │
+│ │ ·预算/治理      │  │ 底部面板：文件工作区·任务进度·回放 │ │
+│ │ 输入框+P0快捷键  │  │                               │ │
+│ └──────────────┘  └───────────────────────────────┘ │
+└───────────────────────┬──────────────────────────────┘
+                        ▼
+┌──────────────────────────────────────────────────────┐
+│ FastAPI sidecar（127.0.0.1:8899，随桌面程序启停）        │
+│ ┌─────────────┐   ┌──────────────────────────┐        │
+│ │ 实时消息总线    │──▶│ 事件溯源日志               │        │
+│ │ WS房间·优先级队列│   │ 可回放·可审计              │        │
+│ └──────┬──────┘   └──────────────────────────┘        │
+│        ▼                                             │
+│ ┌────────────────────────────┐                       │
+│ │ 编排层：CEO总编排 → 部门主管   │                       │
+│ │ 拆目标·排产单·验收·仲裁       │                       │
+│ └──────┬─────────────────────┘                       │
+│        ▼ dispatch（排产单）                           │
+│ ┌────────────────────────────┐                       │
+│ │ 执行层：内置Agent A/B          │──── 本机外部Agent       │
+│ │ 加载身份卡·群内带标签·互聊      │     （TRAE/ZCode 经     │
+│ └──────┬─────────────────────┘      接入网关进群）     │
+└────────┼─────────────────────────────────────────────┘
+         │
+   ┌─────┼──────────┬──────────────┬─────────────┐
+   ▼     ▼          ▼              ▼             ▼
+ MCP工具层 共享文件工作区  向量记忆库      LLM API    Agent接入网关
+(按身份过滤)(版本·乐观锁) (公共/私有隔离)  (可插拔)   (MCP/SSE/bridge)</div>
+  <h3>进程模型</h3>
+  <ul>
+    <li><strong>Tauri 主进程</strong>：仅负责窗口与 sidecar 生命周期——启动时拉起 FastAPI 子进程并做健康检查（就绪前显示启动屏），异常退出自动重启（退避策略），窗口关闭时终止子进程。Rust 侧不承载业务逻辑。</li>
+    <li><strong>FastAPI sidecar</strong>：全部业务所在（总线、编排、事件流、记忆、网关），监听 <code>127.0.0.1:8899</code>，同端口托管前端静态资源；开发期浏览器可直接打开同一地址调试。</li>
+    <li><strong>MVP 不打包</strong>：开发期以 <code>cargo tauri dev</code> 弹窗运行验证功能；安装包（NSIS/MSI）留到 MVP 验收通过后再做。</li>
+  </ul>
+  <h3>架构要点</h3>
+  <ul>
+    <li><strong>一切皆消息</strong>：人类输入、Agent 输出、文件引用、排产单、回执、中断指令统一进入 append-only 事件流，全程可回放。</li>
+    <li><strong>同步收到 = 异步扇出</strong>：总线把命令并发派发给每个订阅的 Agent（<code>asyncio.gather</code>），各带独立上下文并行执行。</li>
+    <li><strong>薄编排层</strong>：初版自研轻量运行时；可参考 AutoGen GroupChat 的发言轮转机制，LangGraph 作为生产化演进方向。</li>
+    <li><strong>前端布局（v1.2 冻结）</strong>：左侧全功能侧边栏承载交互与设置——房间/成员列表、身份卡图形化编辑器、LLM 模型设置、记忆检索、预算治理、命令输入框与 P0 快捷按钮，常用操作不离开当前房间；右侧工作台以群聊消息流为主体，文件工作区 / 任务进度 / 事件回放做成可切换底部面板。侧边栏可折叠给工作台让位。</li>
+    <li><strong>协议分层</strong>：MCP 管工具与文件访问（每个 Agent 只看见身份允许的工具视图）；A2A 协议出口预留，远期接入外部 Agent。</li>
+  </ul>
+  <div class="callout">
+    <strong>Agent 一等公民</strong>：执行层的「本机外部 Agent」经第 14 章接入网关进群后与内置 Agent 完全同权——同排产单投递、同身份卡约束、同事件流审计。房间内没有内置 LLM Agent 时系统照常运转，成为纯粹的外部 Agent 协作平台。
+  </div>
+</section>
+
+<section id="s4">
+  <h2><span class="no">4</span>消息协议设计</h2>
+  <p>消息协议是整个系统的地基，第一版即冻结 schema 并带版本号。所有消息为 JSON，经 WebSocket 传输，落库于事件流。</p>
+  <h3>4.1 消息类型</h3>
+  <table>
+    <tr><th>类型</th><th>发送者</th><th>语义</th><th>优先级</th></tr>
+    <tr><td><code>interrupt</code></td><td>人类</td><td>最高优先级：中断 / 修正 / 终止，抢占一切</td><td>P0</td></tr>
+    <tr><td><code>task</code></td><td>人类</td><td>下达任务目标，触发编排</td><td>P1</td></tr>
+    <tr><td><code>dispatch</code></td><td>编排层</td><td>排产单：指定执行者、顺序、交付物</td><td>P2</td></tr>
+    <tr><td><code>chat</code></td><td>Agent/人类</td><td>普通群聊 / @提及互聊</td><td>P3</td></tr>
+    <tr><td><code>deliver</code></td><td>Agent</td><td>交付物：文件引用 + manifest</td><td>P3</td></tr>
+    <tr><td><code>receipt</code></td><td>编排层</td><td>验收回执：通过 / 打回（含原因）</td><td>P3</td></tr>
+    <tr><td><code>system</code></td><td>系统</td><td>熔断触发、越权拦截、预算告警</td><td>P2</td></tr>
+  </table>
+  <h3>4.2 通用消息结构</h3>
+<pre><code>{
+  "msg_id": "uuid",
+  "schema_version": "1.0",
+  "room_id": "room_xxx",
+  "type": "dispatch",
+  "priority": 2,                  // 0=interrupt 最高
+  "sender": { "kind": "orchestrator", "id": "ceo", "label": "总编排" },
+  "mentions": ["agent_b"],          // @提及，定向投递
+  "payload": { ... },              // 按类型定义
+  "context_refs": ["msg_aaa"],     // 引用的历史消息/文件
+  "parent_task_id": "task_xxx",
+  "created_at": "2026-08-27T10:00:00+08:00"
+}</code></pre>
+  <h3>4.3 排产单 payload（dispatch）</h3>
+<pre><code>{
+  "subtasks": [
+    {
+      "id": "st_1",
+      "assignee": "agent_a",
+      "identity_label": "调研员",
+      "instruction": "检索竞品资料并写调研笔记",
+      "depends_on": [],
+      "deliverable": { "type": "file", "path": "workspace/research.md" },
+      "budget": { "max_tokens": 80000, "max_turns": 6 }
+    },
+    {
+      "id": "st_2",
+      "assignee": "agent_b",
+      "identity_label": "开发员",
+      "instruction": "依据调研笔记实现原型页面",
+      "depends_on": ["st_1"],
+      "deliverable": { "type": "file", "path": "workspace/proto/index.html" }
+    }
+  ]
+}</code></pre>
+  <div class="callout">
+    <strong>投递语义</strong>：总线按优先级队列派发——P0 立即抢占（中断当前生成），P1/P2 插队，P3 顺序。<code>mentions</code> 非空时仅定向投递给被 @者，但仍对所有旁观者可见。
+  </div>
+</section>
+
+<section id="s5">
+  <h2><span class="no">5</span>用户自定义身份与标签体系</h2>
+  <p>身份即配置：用户为每个 Agent 编写身份卡，加载后 Agent 在群内获得可见标签，并严格只执行身份对应部分的工作。同一 LLM 加载不同身份卡即为不同“员工”。</p>
+  <h3>5.1 身份卡结构（YAML/JSON 存库）</h3>
+<pre><code>identity_id: backend-dev
+label: 开发员                    # 群内显示的标签名
+description: 负责后端实现与自测
+persona: 严谨、先定接口再动手、不懂就问
+responsibilities: [写代码, 改工作区文件, 自测]
+tools_allow: [fs.write, fs.read, shell.run, git.*]
+fs_scope: [workspace/src/**]     # 文件写权限边界
+budget: { tokens_per_task: 200000, max_chat_turns: 6 }
+handoff: 产出必须写入工作区并附 manifest
+created_by: user_001
+version: 3</code></pre>
+  <h3>5.2 运行机制</h3>
+  <ul>
+    <li><strong>入群绑定</strong>：用户把身份卡指派给 Agent A / B（可随时更换），Agent 头像旁显示标签徽标，发言携带标签前缀。</li>
+    <li><strong>上下文注入</strong>：身份卡的 description / persona / responsibilities 注入系统提示词；工具白名单生成该 Agent 的 MCP 工具视图。</li>
+    <li><strong>执行约束</strong>：收到排产单时校验 <code>identity_label</code> 匹配；越界请求（调用白名单外工具、写权限外文件）由总线层直接拒绝并记录，不靠提示词“劝”。</li>
+    <li><strong>图形化编辑器</strong>：身份卡以表单控件编辑（工具白名单勾选、fs_scope 填写、预算滑杆），附 YAML 源码视图，支持导入导出分享。</li>
+    <li><strong>身份即资产</strong>：身份卡独立建表、带作者与版本，支持导出分享——为远期“身份市场”预留。</li>
+  </ul>
+  <div class="callout warn">
+    <strong>防串味</strong>：多个身份卡不共享对话历史。每个 Agent 维护私有记忆，只有结论（而非全程闲聊）沉淀到房间级公共记忆。
+  </div>
+</section>
+
+<section id="s6">
+  <h2><span class="no">6</span>职位化自主编排</h2>
+  <h3>6.1 编排层级</h3>
+  <table>
+    <tr><th>层级</th><th>角色</th><th>职责</th><th>MVP 是否启用</th></tr>
+    <tr><td>L0</td><td>人类</td><td>下目标、interrupt 仲裁、关键节点确认</td><td>✔</td></tr>
+    <tr><td>L1</td><td>CEO 总编排器</td><td>拆解目标、生成任务分解图、跨部门仲裁、汇总</td><td>✔</td></tr>
+    <tr><td>L2</td><td>部门主管</td><td>内部排产、验收、打回</td><td>V2 引入</td></tr>
+    <tr><td>L3</td><td>执行者 Agent</td><td>按身份卡执行、互聊、交付</td><td>✔（A/B 双 Agent）</td></tr>
+  </table>
+  <div class="callout">
+    <strong>黄金法则</strong>：编排者永不执行，执行者永不编排。小任务（3 个以内子任务）自动退化为单层排产，避免过度设计。
+  </div>
+  <h3>6.2 标准编排流程</h3>
+  <ol>
+    <li>用户下达 <code>task</code> → CEO 生成任务分解图（子任务+依赖+所需身份），<strong>先给用户确认</strong>（可配置为自动通过）。</li>
+    <li>确认后 CEO 发 <code>dispatch</code> 排产单 → 总线按依赖顺序投递。</li>
+    <li>执行者按排产单工作，互聊走群内 @提及（计入轮数预算）。</li>
+    <li>交付 <code>deliver</code> → 编排层验收 <code>receipt</code>：不合格打回（附原因，计入轮数），合格进入下一子任务。</li>
+    <li>全部完成 → CEO 汇总结果 + 成本报告，@人类查收。</li>
+  </ol>
+  <h3>6.3 发言权调度</h3>
+  <ul>
+    <li>排产单内声明的执行顺序优先；单外自由 @提及为兜底，计入互聊轮数。</li>
+    <li>硬性熔断：单任务互聊超 <code>max_chat_turns</code> 或 token 超预算 → <code>system</code> 消息中断并 @人类裁决。</li>
+  </ul>
+</section>
+
+<section id="s7">
+  <h2><span class="no">7</span>人类最高优先级机制</h2>
+  <p>人类不是旁观者，而是系统的最高仲裁者。<code>interrupt</code>（P0）消息可抢占一切正在进行的 Agent 活动。</p>
+  <h3>7.1 三档介入语义</h3>
+  <table>
+    <tr><th>档位</th><th>命令示例</th><th>系统行为</th></tr>
+    <tr><td><strong>修正</strong></td><td>“方向不对，改成调研国内市场”</td><td>当前子任务作废，CEO 基于新需求重排，已产出的有效交付物保留</td></tr>
+    <tr><td><strong>暂停</strong></td><td>“都停一下”</td><td>所有 Agent 挂起，状态快照入库，等待人类后续指令恢复</td></tr>
+    <tr><td><strong>终止</strong></td><td>“这个任务取消”</td><td>任务整体终止，事件流封存，成本结算归档</td></tr>
+  </table>
+  <h3>7.2 抢占实现</h3>
+  <ul>
+    <li>总线为每个 Agent 维护生成句柄，P0 到达时立即 cancel 当前 LLM 流式生成。</li>
+    <li>中断点之后的事件标记 <code>invalidated: true</code>，回放时可辨识。</li>
+    <li>前端提供醒目的一键操作：<span class="kbd">停止全部</span> <span class="kbd">@某Agent 修正</span>。</li>
+  </ul>
+  <h3>7.3 死锁自动求助</h3>
+  <p>熔断触发（互聊超轮、预算见底、编排层反复打回同一子任务 ≥3 次）时，系统自动发 <code>system</code> 消息 @人类，附带死锁上下文摘要（谁和谁争、争了几轮、各自立场），等待人类一句话裁决。</p>
+  <div class="callout danger">
+    <strong>设计红线</strong>：任何自动化路径都必须存在一条“人类一句话就能接管”的出口。熔断不是终点，移交人类才是。
+  </div>
+</section>
+
+<section id="s8">
+  <h2><span class="no">8</span>文件共享工作区</h2>
+  <ul>
+    <li><strong>存储</strong>：本地目录 + SQLite 元数据（V2 换 PostgreSQL / S3 兼容对象存储）。每个房间独立工作区目录。</li>
+    <li><strong>共享语义</strong>：文件不是聊天附件，而是共享上下文——Agent 交付物写入工作区并附 manifest，其他 Agent 按路径引用继续加工。</li>
+    <li><strong>冲突控制</strong>：写入带版本号乐观锁（读时记录 version，写时校验，冲突返回最新版本让 Agent 重写）；同一文件并发任务先写隔离目录再合并。</li>
+    <li><strong>权限</strong>：按身份卡 <code>fs_scope</code> 限定读写边界；MVP 阶段简化为“读共享、写归当前任务负责 Agent”。</li>
+    <li><strong>工具化</strong>：Agent 不直接碰文件系统，统一经 MCP 文件工具（fs.read / fs.write / fs.list），行为全部入事件流。</li>
+  </ul>
+</section>
+
+<section id="s9">
+  <h2><span class="no">9</span>多方记忆与向量库</h2>
+  <h3>9.1 记忆分层</h3>
+  <table>
+    <tr><th>层级</th><th>内容</th><th>可见性</th><th>载体</th></tr>
+    <tr><td>会话短期</td><td>当前任务对话窗口</td><td>按身份隔离</td><td>内存 / 事件流</td></tr>
+    <tr><td>房间级公共</td><td>滚动摘要：结论、决议、接口约定</td><td>全房间</td><td>文本摘要 + 向量库</td></tr>
+    <tr><td>Agent 私有</td><td>角色立场、历史偏好、个人笔记</td><td>仅本 Agent</td><td>向量库（私有 collection）</td></tr>
+    <tr><td>跨房间长期</td><td>身份卡经验、可复用知识</td><td>按身份卡授权</td><td>向量库（V2）</td></tr>
+  </table>
+  <h3>9.2 向量库方案</h3>
+  <ul>
+    <li><strong>选型</strong>：Chroma / Qdrant 本地实例 + 本地中文友好 embedding 模型（如 bge-m3），记忆数据不出本机。</li>
+    <li><strong>Collection 划分</strong>：<code>room_{id}_public</code> 与 <code>agent_{id}_private</code> 物理隔离，检索接口强制带身份鉴权。</li>
+    <li><strong>写入时机</strong>：任务验收通过时沉淀结论到公共记忆；Agent 可在交付时主动写私有笔记。闲聊不入库。</li>
+    <li><strong>检索注入</strong>：Agent 收到排产单时自动检索 top-k 相关记忆（如“上次类似任务的做法”“对方定的接口规范”），注入上下文，标注来源时间。</li>
+  </ul>
+  <div class="callout warn">
+    <strong>隔离红线</strong>：私有记忆检索权限与身份绑定，任何 Agent 无法读到他者私有记忆；公共记忆全员可查但写入需经编排层确认，防止错误结论污染。
+  </div>
+</section>
+
+<section id="s10">
+  <h2><span class="no">10</span>治理、安全与成本</h2>
+  <ul>
+    <li><strong>工具治理</strong>：白名单在总线层强制校验，越权调用拒绝 + 记录 + 前端提示。</li>
+    <li><strong>预算熔断</strong>：房间级 / 任务级 / Agent 级三层 token 预算；水位 80% 告警，100% 熔断并 @人类。</li>
+    <li><strong>成本仪表盘</strong>：实时显示房间 token 消耗、各 Agent 花费排行、单次任务预算水位——数据直接来自事件流。</li>
+    <li><strong>事件溯源</strong>：全量消息 + 工具调用 + 文件版本入流，支持按任务回放（“Agent 为什么吵起来”一键复盘）。</li>
+    <li><strong>密钥安全</strong>：LLM API Key 仅存服务端环境变量，前端零接触。</li>
+  </ul>
+</section>
+
+<section id="s11">
+  <h2><span class="no">11</span>数据表设计</h2>
+  <table>
+    <tr><th>表</th><th>关键字段</th><th>说明</th></tr>
+    <tr><td><code>rooms</code></td><td>id, name, budget_limit, created_by, created_at</td><td>群聊房间</td></tr>
+    <tr><td><code>agents</code></td><td>id, room_id, name, identity_id, llm_config, kind(internal/external), status</td><td>房间内的 Agent 实例（内置 / 外部接入同一张表）</td></tr>
+    <tr><td><code>identities</code></td><td>id, label, config_yaml, author, version, created_at</td><td>用户身份卡（可导出分享）</td></tr>
+    <tr><td><code>messages</code></td><td>id, room_id, type, priority, sender, payload_json, mentions, parent_task_id, invalidated, created_at</td><td>事件流（append-only）</td></tr>
+    <tr><td><code>tasks</code></td><td>id, room_id, goal, plan_json, status, token_used, budget</td><td>任务与分解图</td></tr>
+    <tr><td><code>files</code></td><td>id, room_id, path, version, author_agent, manifest_json, updated_at</td><td>工作区文件元数据</td></tr>
+    <tr><td><code>memory_meta</code></td><td>id, scope(room/agent), owner_id, collection, doc_count</td><td>向量库 collection 登记</td></tr>
+  </table>
+</section>
+
+<section id="s12">
+  <h2><span class="no">12</span>MVP 开发路线</h2>
+  <table>
+    <tr><th style="width:120px">阶段</th><th>目标</th><th>验收标准</th></tr>
+    <tr><td>第 1 步</td><td>桌面程序骨架 + 「1人 + 1Agent」群聊链路：Tauri 2 窗口拉起 FastAPI sidecar，左侧栏（房间列表+输入框）+ 右侧消息流布局，WS 房间 + LLM 流式回复 + 事件落库</td><td>双击/命令启动弹桌面窗口；发消息有流式回复；重启程序后历史可恢复</td></tr>
+    <tr><td>第 2 步</td><td>双 Agent + 身份卡：左栏身份卡编辑器 Tab、@提及、广播扇出、群内标签、interrupt 抢占（P0 快捷按钮）</td><td>命令同步到达 A/B；标签正确显示；P0 可中断生成</td></tr>
+    <tr><td>第 3 步</td><td>文件工作区：上传、预览、Agent 经 MCP 工具读写（右侧底部面板呈现文件树与版本）</td><td>Agent 交付物落工作区，版本冲突可复现并被拦截</td></tr>
+    <tr><td>第 4 步</td><td>编排闭环：CEO 拆目标→确认→排产单→验收 + 向量记忆 + 熔断</td><td>完整跑通一个双 Agent 协作任务，死锁能自动求助</td></tr>
+    <tr><td>第 5 步</td><td>本地 Agent 接入：MCP 网关上线，先联调 TRAE 再复制到 ZCode；「无人值守自动接活」实现为每实例可选开关</td><td>TRAE 经网关收发消息并完成一次交付，越权被拦截；开关切换后两种模式行为均正确</td></tr>
+  </table>
+  <p class="mermaid-note">V2 展望：部门主管层、跨房间记忆、A2A 接外部 Agent、身份卡市场、安装包分发（NSIS/MSI）。</p>
+</section>
+
+<section id="s13">
+  <h2><span class="no">13</span>风险与关键决策</h2>
+  <table>
+    <tr><th>风险</th><th>对策</th></tr>
+    <tr><td>Agent 互聊客套死循环</td><td>排产单驱动 + 轮数熔断 + 自动求助人类</td></tr>
+    <tr><td>成本随 Agent 数倍增</td><td>三层预算 + 实时仪表盘 + 小任务单层退化</td></tr>
+    <tr><td>身份串味 / 记忆污染</td><td>记忆物理隔离 + 公共写入需验收 + 对话历史隔离</td></tr>
+    <tr><td>编排层自身出错</td><td>任务分解图人类确认闸 + interrupt 随时接管</td></tr>
+  </table>
+  <h3>关键决策（v1.1 已确认；v1.2 于 2026-08-27 追加冻结）</h3>
+  <table>
+    <tr><th style="width:150px">决策项</th><th>结论</th></tr>
+    <tr><td>产品形态 <span class="tag">v1.2</span></td><td><strong>桌面原生程序</strong>：Tauri 2 窗口壳 + FastAPI sidecar（127.0.0.1:8899，随程序启停），双击启动免浏览器；MVP 开发期以 <code>cargo tauri dev</code> 运行不打包，安装包留到 MVP 验收后。Rust 仅管窗口与进程生命周期，业务全部在 Python 后端。</td></tr>
+    <tr><td>前端布局 <span class="tag">v1.2</span></td><td><strong>左侧全功能侧边栏 + 右侧工作台</strong>：左栏放房间/成员、身份卡编辑器、LLM 设置、记忆检索、预算治理与输入框（Tab/折叠分区，可整体折叠）；右侧为群聊消息流 + 文件/任务/回放底部面板。</td></tr>
+    <tr><td>产品定位 <span class="tag">v1.2</span></td><td><strong>服务电脑上的 Agent</strong>：软件首要目标是让本机 Agent（TRAE / ZCode 等）之间经此平台交流协作；内置 LLM Agent 为补充形态，外部 Agent 经接入网关进群为一等公民。</td></tr>
+    <tr><td>LLM 接入</td><td><strong>自定义 API</strong>：OpenAI 兼容端点（Base URL / API Key / 模型名在设置页配置），支持多模型插槽按 Agent 单独指定</td></tr>
+    <tr><td>身份卡编辑</td><td><strong>图形化编辑器</strong>：MVP 即提供表单式编辑（职责、工具白名单勾选、fs_scope、预算滑杆等字段化控件），附「YAML 源码」标签页支持导入导出。编辑器置于左侧栏 Tab 内</td></tr>
+    <tr><td>embedding 方案</td><td><strong>本地部署</strong>：本地中文友好 embedding 模型（如 bge-m3）+ Chroma / Qdrant 本地实例，记忆数据不出本机</td></tr>
+    <tr><td>外部 Agent 接入顺序</td><td><strong>先 TRAE 后 ZCode</strong>：第 5 步先完成 TRAE 联调，再把接线复制到 ZCode</td></tr>
+    <tr><td>无人值守接活</td><td><strong>可选配置项</strong>：每个外部 Agent 实例独立开关——关闭时拉取式接活（用户在场驱动）；开启时由 room-bridge 订阅总线自动唤醒认领子任务</td></tr>
+    <tr><td>并发写策略</td><td><strong>采用最优解：worktree 分支隔离</strong>，同一仓库多 Agent 各持独立分支，经验收流程合并</td></tr>
+  </table>
+  <div class="callout ok">
+    <strong>所有开放问题已收敛</strong>，相关章节（第 3、5、9、12、14 章）已同步更新，可直接按第 12 章路线开工。
+  </div>
+</section>
+
+<section id="s14">
+  <h2><span class="no">14</span>本地 Agent 接入方案（TRAE / ZCode）</h2>
+  <p>让运行在本机的既有 Agent（TRAE、ZCode 等）作为参与者进群，领取身份卡对应职责——<strong>不是重造 Agent，而是给它们一个群内工位</strong>。接入层统称「Agent 接入网关」。<strong>v1.2 定位：本机外部 Agent 是本系统的首要服务对象</strong>，本章方案是产品核心能力而非附加集成。</p>
+  <h3>14.1 三种接入模式</h3>
+  <table>
+    <tr><th style="width:110px">模式</th><th>适用场景</th><th>接入方式</th><th>唤醒机制</th></tr>
+    <tr><td><strong>MCP 网关</strong><br>（推荐首选）</td><td>TRAE / ZCode 本身是 MCP 客户端，零代码接线</td><td>本系统以 MCP Server 身份注册进 <code>.trae\mcp.json</code> 与 <code>.zcode\config.json</code></td><td>拉取式：Agent 主动调工具收发；实时性受客户端会话驱动限制</td></tr>
+    <tr><td><strong>HTTP API</strong></td><td>有编程能力的自定义 Agent 直接对接</td><td>REST + SSE / 长轮询，持 ROOM_TOKEN 鉴权</td><td>SSE 推送可达准实时</td></tr>
+    <tr><td><strong>桥接守护进程</strong></td><td>需要无人值守、自动接活的场景</td><td>每台机器跑一个 <code>room-bridge</code> 小进程</td><td>WS 订阅 + 无头 CLI 调用，全自动唤醒</td></tr>
+  </table>
+  <div class="callout warn">
+    <strong>诚实说明</strong>：纯 MCP 模式下“同步收到”依赖客户端是否支持服务器主动通知及后台自主运行；若客户端由用户会话驱动才会调工具，自动性会打折。要真正全自动接活，用桥接守护进程模式。
+  </div>
+  <h3>14.2 MCP 网关设计（推荐路径）</h3>
+  <p>把群聊系统包装成一个 MCP Server（本地 stdio 或远程 SSE 均可），对每个外部 Agent 暴露按其身份卡过滤后的工具视图：</p>
+<pre><code>// MCP 工具清单（经身份卡白名单过滤后可见）
+join_room(room_id)              # 进群，声明身份
+poll_messages(cursor)           # 拉取新消息（事件流游标）
+send_message(type, text, refs)  # chat 互聊 / deliver 交付
+claim_subtask(subtask_id)       # 认领排产单中属于自己的子任务
+report_receipt(subtask_id, ok)  # 上报验收回执
+query_memory(query, scope)      # scope=public|private，向量检索注入上下文
+fs_read(path) / fs_write(path)  # 文件读写，走 fs_scope 边界校验
+
+// 资源
+room://{room_id}/events         # 只读事件流（供 Agent 回放上下文）
+identity://{agent_id}/card      # 自身身份卡只读视图</code></pre>
+  <p>两端各加一条配置即完成接线（字段名以各端当前文档为准）：</p>
+<pre><code>// TRAE： .trae\mcp.json        // ZCode： .zcode\config.json
+{                                {
+  "mcpServers": {                  "mcpServers": {
+    "agent-room": {                  "agent-room": {
+      "command": "python",             "url": "http://127.0.0.1:8899/sse",
+      "args": [".../mcp_stdio.py"],    "timeoutMs": 60000,
+      "env": { "ROOM_TOKEN": "***" }   "headers": { "Authorization": "Bearer ***" }
+    }                                }
+  }                                }
+}                                }</code></pre>
+  <h3>14.3 桥接守护进程（全自动唤醒）</h3>
+  <div class="flow-box">room-bridge 启动 → WS 订阅 wss://…/room/{id}（持 ROOM_TOKEN）
+     │ 收到 dispatch 子任务（按绑定身份过滤）
+     ▼
+调用本机 Agent CLI 无头执行（TRAE / ZCode 命令行模式）
+     │ stdout 分片流式回传 send_message(type=chat)
+     ▼
+产出文件写入挂载的工作区目录 → send_message(type=deliver)
+     ▼
+心跳 30s 上报在线状态；收到 P0 interrupt 立即 kill 子进程</div>
+  <h3>14.4 身份映射与权限继承</h3>
+  <table>
+    <tr><th>事项</th><th>规则</th></tr>
+    <tr><td>实例-身份对应</td><td>一个外部实例绑定一张身份卡（如 TRAE→开发员、ZCode→审稿员），群内标签同内置 Agent 一致；可在前端随时换绑</td></tr>
+    <tr><td>权限校验位置</td><td>白名单与 <code>fs_scope</code> 在<strong>网关侧二次强制校验</strong>，不信任客户端自觉遵守</td></tr>
+    <tr><td>并发写保护</td><td>两台 Agent 写同一 git 仓库时分配独立 worktree/分支，合并仍走系统的版本乐观锁与验收流程</td></tr>
+    <tr><td>审计</td><td>外部 Agent 的全部进出消息、工具调用照常入事件流，可回放可追责</td></tr>
+  </table>
+  <div class="callout danger">
+    <strong>安全红线</strong>：外部 Agent 默认不授予 <code>shell.run</code>，确需开放逐条写进身份卡白名单；ROOM_TOKEN 按 Agent 单独发放、可单独吊销。
+  </div>
+  <h3>14.5 落地决策</h3>
+  <ul>
+    <li><strong>接入顺序</strong>：先 TRAE（MVP 第 5 步联调对象），跑通后将同一网关注册方式复制到 ZCode。</li>
+    <li><strong>无人值守为可选配置</strong>：每实例独立开关——默认关闭（拉取式，用户在场驱动）；开启后 room-bridge 订阅总线，收到 dispatch 子任务自动唤醒本机 Agent CLI 执行。</li>
+    <li><strong>并发写采用 worktree 分支隔离</strong>（最优解）：两台 Agent 写同一仓库各持独立分支，合并走版本乐观锁与验收流程。</li>
+    <li><strong>v1.2 定位重申</strong>：本机外部 Agent 是系统首要服务对象——接入网关与房间总线同为 MVP 必需能力（第 12 章路线中编排闭环完成即联调网关），不是附加功能。</li>
+  </ul>
+</section>
+
+<footer>多Agent群聊协作系统 · 技术设计文档 v1.2 · 由 TRAE 讨论会话整理，ZCode 于 2026-08-27 修订（桌面程序形态 · Agent 一等公民定位）</footer>
+
+</div>
+</body>
+</html>

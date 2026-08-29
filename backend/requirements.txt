@@ -3,3 +3,7 @@ uvicorn[standard]>=0.30
 openai>=1.40
 pydantic>=2.7
 mcp>=1.9
+
+# 开发/测试（端到端脚本用；生产运行不需要）
+httpx2>=2.0        # 代理环境需 trust_env=False
+websockets>=12.0   # WS 测试脚本

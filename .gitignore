@@ -10,3 +10,8 @@ tauri-dev.log
 backend/server.log
 backend/workspace/
 backend/data/
+
+# 系统杂项
+.DS_Store
+Thumbs.db
+*.log
