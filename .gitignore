@@ -9,3 +9,4 @@ tauri-dev.log
 *.pyc
 backend/server.log
 backend/workspace/
+backend/data/

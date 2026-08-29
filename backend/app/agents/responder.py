@@ -126,8 +126,19 @@ async def run_turn(agent_id: str, identity: dict | None, user_text: str,
 
     client = AsyncOpenAI(base_url=settings.llm_base_url, api_key=settings.llm_api_key)
     tools = filter_tools(identity.get("tools_allow") if identity else None)
+    system_prompt = build_system_prompt(agent_id, identity)
+    # 第 5 步：检索注入——公共记忆 + 本 Agent 私有记忆 top-k（隔离红线在 hub 内强制）
+    try:
+        from app.memory.hub import format_memory_context, hub
+
+        hits = await hub.search(room_id, agent_id, user_text, settings.memory_top_k)
+        mem_note = format_memory_context(hits)
+        if mem_note:
+            system_prompt += "\n" + mem_note
+    except Exception:
+        pass  # 记忆库故障不阻断回复主链路
     messages = [
-        {"role": "system", "content": build_system_prompt(agent_id, identity)},
+        {"role": "system", "content": system_prompt},
         {"role": "user", "content": user_text},
     ]
 
@@ -287,6 +298,10 @@ async def respond_agent(bus, msg: Message, agent: dict):
                 payload_text=f"熔断：Agent {aid}（{label}）互聊轮数已达上限，已自动 @人类 裁决。",
                 mentions=["human"],
             ))
+        # 第 5 步：编排器收尾钩子——执行者交付说明触发验收 / 互聊计入任务级熔断
+        from app.orchestrator.ceo import notify_agent_final
+
+        await notify_agent_final(bus, aid, final_text)
     except asyncio.CancelledError:
         # 被打断的生成：首片仍留在库中（payload 空），标记终止避免前端悬挂
         try:

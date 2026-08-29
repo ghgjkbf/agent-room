@@ -81,6 +81,33 @@ CREATE TABLE IF NOT EXISTS files (
   updated_at TEXT NOT NULL,
   UNIQUE(room_id, path)
 );
+CREATE TABLE IF NOT EXISTS tasks (
+  id TEXT PRIMARY KEY,
+  room_id TEXT NOT NULL,
+  goal TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'awaiting_confirm',
+  plan_json TEXT DEFAULT '[]',
+  chat_count INTEGER NOT NULL DEFAULT 0,
+  summary TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS subtasks (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL,
+  room_id TEXT NOT NULL,
+  seq INTEGER NOT NULL,
+  title TEXT NOT NULL,
+  guidance TEXT DEFAULT '',
+  assignee TEXT NOT NULL,
+  depends_on TEXT DEFAULT '[]',
+  status TEXT NOT NULL DEFAULT 'pending',
+  retries INTEGER NOT NULL DEFAULT 0,
+  delivery_text TEXT,
+  accepted_at TEXT,
+  created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_subtasks_task ON subtasks(task_id, seq);
 """
 
 # 迁移后 messages 新增列：完整文本聚合列 + 分片序号/终止标记（协议扩展，旧库自动补）

@@ -24,6 +24,8 @@ class RoomBus:
         from app.rooms.bus import BusRegistry
 
         self.registry_ref = BusRegistry
+        # 编排器等监听器：每条落库消息（含网关侧）发布后回调 cb(bus, msg)
+        self.listeners: list = []
 
     async def join(self, client_id: str, ws: WebSocket):
         await ws.accept()
@@ -71,6 +73,8 @@ class RoomBus:
         await self._store(msg)
         data = json.dumps(msg.to_dict(), ensure_ascii=False)
         await self.broadcast_raw(data)
+        for cb in list(self.listeners):
+            await cb(self, msg)
 
     async def broadcast_raw(self, data: str):
         """向全部订阅者扇出已序列化的消息（流式分片不落库，走此通道）。"""

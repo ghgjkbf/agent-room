@@ -175,6 +175,23 @@
   .deliver-file:hover{background:#ecfdf5;text-decoration:underline;}
   .tool-note{margin-top:4px;font-size:10.5px;color:var(--muted);background:var(--bg);
     border-radius:6px;padding:1px 8px;display:inline-block;}
+  /* 第 5 步：任务面板 + 记忆面板 */
+  .task-card{border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:8px;
+    background:var(--card);font-size:12.5px;}
+  .task-goal{font-weight:600;margin-bottom:4px;}
+  .task-status{color:var(--muted);font-size:11.5px;margin-bottom:6px;}
+  .subtask{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;}
+  .st-chip{display:inline-block;min-width:44px;text-align:center;border-radius:999px;
+    font-size:10.5px;padding:1px 8px;background:var(--bg);color:var(--muted);}
+  .st-chip.st-dispatched{background:#fef9c3;color:#a16207;}
+  .st-chip.st-accepted{background:#dcfce7;color:#15803d;}
+  .st-chip.st-rejected{background:#fee2e2;color:#b91c1c;}
+  .st-chip.st-pending{background:var(--bg);color:var(--muted);}
+  .task-actions{margin-top:6px;display:flex;gap:6px;}
+  .mem-item{border-left:3px solid var(--brand-soft);padding:4px 8px;margin-bottom:6px;
+    font-size:12px;background:var(--card);border-radius:0 8px 8px 0;}
+  .mem-item .mem-meta{color:var(--muted);font-size:10.5px;margin-top:2px;}
+  .msg.orch{border-color:#ddd6fe;background:#faf9ff;}
 
   /* 弹窗（添加外部成员） */
   .modal-mask{position:fixed;inset:0;background:rgba(27,27,31,.35);display:none;
@@ -273,8 +290,13 @@
     </div>
 
     <div class="rp-body" id="rp-task">
-      <div class="grp">任务进度</div>
-      <div class="hint">MVP 第 5 步接入：CEO 拆目标 → 排产单 → 验收闭环的进度视图。</div>
+      <div class="grp">任务 · CEO 编排闭环</div>
+      <label class="f">任务目标（CEO 拆解为排产单，先给你确认）</label>
+      <textarea id="task-goal" rows="2" placeholder="如：调研竞品并输出对比报告" style="width:100%;"></textarea>
+      <button class="btn primary sm" id="btn-issue-task" style="margin-top:6px;">🎯 下达任务</button>
+      <div class="grp" style="margin-top:14px;">任务进度</div>
+      <div id="task-list"></div>
+      <div class="hint">流程：下达 → CEO 拆解 → 你确认 → 按依赖派发排产单 → 交付 → 验收/打回 → 汇总沉淀记忆。互聊超限自动熔断 @你裁决。</div>
     </div>
 
     <div class="rp-body" id="rp-members">
@@ -321,8 +343,10 @@
     </div>
 
     <div class="rp-body" id="rp-memory">
-      <div class="grp">向量记忆库（MVP 第 5 步接入）</div>
-      <div class="hint">规划：房间级公共记忆 + Agent 私有记忆隔离存储于本地 Chroma/Qdrant，任务验收后沉淀结论，检索注入上下文。</div>
+      <div class="grp">向量记忆 · 本地存储</div>
+      <div id="mem-stats" class="hint" style="margin-bottom:8px;"></div>
+      <div id="mem-list"></div>
+      <div class="hint">公共记忆：任务验收通过后沉淀；私有记忆：Agent 交付时写入、仅本人可读。检索 top-k 自动注入 Agent 上下文并标注来源时间。闲聊不入库。</div>
     </div>
   </aside>
 </div>

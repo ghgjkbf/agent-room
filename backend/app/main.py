@@ -18,13 +18,18 @@ from app.core.db import db
 from app.core.message import Message
 from app.files import routes as file_routes
 from app.identities import routes as identity_routes
+from app.memory import routes as memory_routes
 from app.mcp_gateway.server import mount_gateway
+from app.orchestrator import routes as task_routes
+from app.orchestrator.ceo import OrchestratorRegistry
 from app.rooms.bus import BusRegistry
 
-app = FastAPI(title="agent-room", version="0.4.0")
+app = FastAPI(title="agent-room", version="0.5.0")
 app.include_router(identity_routes.router)
 app.include_router(agent_routes.router)
 app.include_router(file_routes.router)
+app.include_router(task_routes.router)
+app.include_router(memory_routes.router)
 mount_gateway(app, BusRegistry)
 
 
@@ -114,8 +119,10 @@ async def _ws_loop(ws: WebSocket, bus, client_id: str):
             mentions=mentions,
         )
         # 先登记生成句柄再落库广播：保证 publish 期间到达的 P0 也能 cancel
+        # 第 5 步：type=task（人类下达目标）改由 CEO 编排器独占——执行者
+        # 等排产单 dispatch 才动工，编排者不执行、执行者不编排
         reply_plan = []
-        if mtype in ("chat", "task"):
+        if mtype == "chat":
             with db() as conn:
                 rows = conn.execute(
                     "SELECT id, name FROM agents WHERE room_id=? ORDER BY id",
@@ -143,6 +150,9 @@ async def _ws_loop(ws: WebSocket, bus, client_id: str):
 @app.websocket("/ws/{room_id}")
 async def room_ws(ws: WebSocket, room_id: str):
     bus = BusRegistry.get(room_id)
+    orch = OrchestratorRegistry.get(room_id)  # CEO 编排器挂为总线监听器
+    if orch.on_message not in bus.listeners:
+        bus.listeners.append(orch.on_message)
     client_id = str(uuid.uuid4())
     await bus.join(client_id, ws)
     try:

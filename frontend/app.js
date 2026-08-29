@@ -12,14 +12,15 @@ function addBubble(msg) {
   const feed = $('feed');
   const el = document.createElement('div');
   const kind = msg.sender.kind;
-  el.className = 'msg ' + (kind === 'human' ? 'human' : kind === 'system' ? 'system' : 'agent');
+  el.className = 'msg ' + (kind === 'human' ? 'human' : kind === 'system' ? 'system' : 'agent')
+    + (['task_plan', 'dispatch', 'receipt'].includes(msg.type) ? ' orch' : '');
 
   if (kind === 'system') {
     el.textContent = msg.payload.text;
   } else {
     const who = document.createElement('div');
     who.className = 'who';
-    let name = kind === 'human' ? '你' : msg.sender.id;
+    let name = kind === 'human' ? '你' : kind === 'orchestrator' ? 'CEO 编排' : msg.sender.id;
     if (kind === 'agent') {
       const meta = agents.find(a => a.id === msg.sender.id);
       name = meta ? meta.name : name;
@@ -29,7 +30,7 @@ function addBubble(msg) {
     lbl.className = 'lbl';
     lbl.textContent = kind === 'agent'
       ? (msg.mentions && msg.mentions.length ? '@' + msg.mentions.join(',@') : agentLabel(msg.sender.id))
-      : kind === 'human' ? '广播' : 'system';
+      : kind === 'human' ? '广播' : kind === 'orchestrator' ? 'L1 编排' : 'system';
     who.appendChild(lbl);
     const body = document.createElement('div');
     body.className = 'body';
@@ -123,6 +124,10 @@ function connect() {
     if (msg.type === 'system') refreshMembers(); // 熔断等系统事件后刷新轮数
     if (msg.type !== 'system' || (msg.payload && msg.payload.text)) updateConvoLast(msg);
     if (msg.type === 'deliver') refreshFiles();  // 交付消息同步文件面板
+    if (['task', 'task_plan', 'dispatch', 'receipt'].includes(msg.type)) {
+      fetchTasks();                                // 编排事件 → 任务面板同步
+      if (msg.type === 'receipt') refreshMemory(); // 验收沉淀记忆后同步记忆面板
+    }
   };
   ws.onclose = () => { setChip('● 已断开，3 秒重连', '#b42318'); setTimeout(connect, 3000); };
   ws.onerror = () => ws.close();
@@ -501,6 +506,74 @@ $('btn-save-preview').addEventListener('click', async () => {
   refreshFiles();
 });
 
+/* ---------- 任务（CEO 编排闭环）与向量记忆 ---------- */
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+const SUB_CHIP = { pending: '待派发', dispatched: '执行中', accepted: '已验收', rejected: '已打回' };
+const TASK_ST = { awaiting_confirm: '待确认', running: '执行中', paused: '已熔断·待裁决', done: '已完成', aborted: '已作废' };
+
+async function fetchTasks() {
+  const res = await fetch('/api/tasks?room_id=default');
+  if (!res.ok) return;
+  renderTasks((await res.json()).tasks || []);
+}
+function renderTasks(tasks) {
+  const el = $('task-list');
+  if (!tasks.length) {
+    el.innerHTML = '<div class="hint">（暂无任务；在上方填写目标并下达，CEO 将拆解为排产单）</div>';
+    return;
+  }
+  el.innerHTML = tasks.map(t => {
+    const subs = (t.subtasks || []).map(s =>
+      `<div class="subtask"><span class="st-chip st-${s.status}">${SUB_CHIP[s.status] || s.status_label}</span>` +
+      `<span>#${s.seq} ${esc(s.title)} → ${esc(s.assignee)}${s.retries ? `（打回${s.retries}次）` : ''}</span></div>`).join('');
+    let actions = '';
+    if (t.status === 'awaiting_confirm')
+      actions = `<button class="btn primary sm" data-act="confirm" data-id="${t.id}">✓ 确认开工</button>` +
+                `<button class="btn danger-full sm" data-act="abort" data-id="${t.id}">作废</button>`;
+    else if (t.status === 'paused')
+      actions = `<button class="btn primary sm" data-act="resume" data-id="${t.id}">继续执行</button>` +
+                `<button class="btn danger-full sm" data-act="abort" data-id="${t.id}">终止</button>`;
+    return `<div class="task-card"><div class="task-goal">🎯 ${esc(t.goal)}</div>` +
+      `<div class="task-status">状态：${TASK_ST[t.status] || t.status_label}</div>${subs}` +
+      (actions ? `<div class="task-actions">${actions}</div>` : '') + '</div>';
+  }).join('');
+  el.querySelectorAll('button[data-act]').forEach(b => b.addEventListener('click', async () => {
+    const act = b.dataset.act;
+    const url = `/api/tasks/${b.dataset.id}/${act === 'abort' ? 'abort' : 'confirm'}`;
+    const r = await (await fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: act }),
+    })).json();
+    if (!r.ok) return alertSys(r.detail || '操作失败');
+    alertSys(act === 'abort' ? '任务已作废。' : act === 'resume' ? '已恢复执行，CEO 按依赖继续派发。' : '已确认开工，CEO 按依赖派发排产单。');
+    fetchTasks();
+  }));
+}
+$('btn-issue-task').addEventListener('click', () => {
+  const v = $('task-goal').value.trim();
+  if (!v) return alertSys('请先填写任务目标');
+  if (!ws || ws.readyState !== WebSocket.OPEN) return alertSys('连接未就绪');
+  ws.send(JSON.stringify({ type: 'task', text: v }));
+  $('task-goal').value = '';
+  alertSys('任务已下达，CEO 正在拆解…');
+});
+
+async function refreshMemory() {
+  const res = await fetch('/api/memory?room_id=default');
+  if (!res.ok) return;
+  const d = await res.json();
+  const s = d.stats || {};
+  const agentPart = Object.entries(s.agents || {}).map(([a, n]) => `${a}:${n}`).join('，');
+  $('mem-stats').textContent = `公共记忆 ${s.public || 0} 条` + (agentPart ? `；私有记忆 ${agentPart}` : '');
+  const items = d.recent || [];
+  $('mem-list').innerHTML = items.length
+    ? items.map(r => `<div class="mem-item">${esc(r.text)}<div class="mem-meta">${esc(r.scope)} · ${esc((r.created_at || '').slice(0, 16).replace('T', ' '))}</div></div>`).join('')
+    : '<div class="hint">（暂无记忆；任务验收通过后自动沉淀）</div>';
+}
+
 /* ---------- 启动 ---------- */
 async function boot() {
   const data = await (await fetch('/api/room/default')).json();
@@ -508,6 +581,8 @@ async function boot() {
   await refreshIdentities();
   await refreshMembers();
   await refreshFiles();
+  await fetchTasks();
+  await refreshMemory();
   connect();
   (data.history || []).forEach(m => handleMessage(m));
 }
