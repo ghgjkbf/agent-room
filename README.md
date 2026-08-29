@@ -2,7 +2,16 @@
 
 基于 [agent-collab-system-design-doc.html](../../agent-collab-system-design-doc.html) v1.2 设计文档实现的桌面程序。定位：服务电脑上的 Agent——让本机多个 Agent（内置 LLM Agent + TRAE/ZCode 等外部 Agent）像拉群一样进同一房间交流协作。
 
-当前进度：**MVP 第 4 步完成**（文件工作区：fs 工具 + base_version 乐观锁 + 文件面板；UI 微信式布局改版）。**第 5 步交接文档：[docs/STEP5-HANDOFF.md](docs/STEP5-HANDOFF.md)**（新会话从这里继续）。
+当前进度：**MVP 第 5 步完成**（CEO 编排闭环 + 向量记忆 + 任务级熔断）。**第 6 步交接文档：[docs/STEP6-HANDOFF.md](docs/STEP6-HANDOFF.md)**（新会话从这里继续）。
+
+## 第 5 步能力清单（已完成并验收）
+
+- **CEO 编排闭环**（设计文档 s6）：任务面板下达目标 → CEO 拆任务分解图（LLM JSON 拆解，未配置时占位双子任务模板）→ 人类确认 → `dispatch` 排产单按 `depends_on` 依赖派发 → 执行者交付（deliver 或交付说明）→ 验收 `receipt`（不合格打回附原因重做，上限 2 次超限熔断）→ 全部完成汇总 @人类。黄金法则「编排者不执行、执行者不编排」：CEO 是总线监听器（L1 编排，不占成员席位），`type=task` 消息不再直触 responder。
+- **任务级熔断**：执行期间互聊条数超 `task_max_chat_turns`（默认 12）→ system @人类并暂停任务；任务面板可「继续执行」（resume 按依赖续派）或终止。房间级轮数熔断（budget_turns）保留不变。
+- **向量记忆**（设计文档 s9）：collection `room_{id}_public` / `agent_{id}_private` 物理隔离存储于 `backend/data/memory/`；检索接口强制带 `(room_id, agent_id)`，私有记忆仅本人可见；写入时机=验收通过沉淀公共结论 + Agent 交付写私有笔记，闲聊不入库；responder 组装上下文时检索 top-k 注入并标注来源时间。
+- **本地向量库选型**：内置 JSON 向量库（暴力余弦，Python 3.14 暂无 chromadb 兼容轮子；接口与 Chroma 同形，换装只动 `app/memory/hub.py`）；embedding 留 OpenAI 兼容 `/embeddings` 接口位，未配置时降级为确定性字符 n-gram 哈希 256 维（离线零依赖）。
+- **前端**：任务面板（下达/分解图确认/子任务状态 chips/熔断恢复/作废）+ 记忆面板（统计/最近记忆）；CEO 编排气泡（「L1 编排」标签）随事件流渲染。
+- **验收**：pytest 34 例全过（新增记忆隔离/持久化 4 例 + 编排 6 例：拆解/依赖派发/打回重试上限/互聊熔断/作废/mock 全链路含记忆沉淀）；真机 e2e（WS 下达 → 确认 → 7 秒完成两环验收 → 汇总 → 公共记忆沉淀）；GUI 走查（Playwright + 系统 Edge）通过。
 
 ## 第 4 步能力清单（已完成并验收）
 
@@ -48,7 +57,7 @@ Tauri 2 桌面窗口（WebView 加载 127.0.0.1:8899）
 ```
 
 - **前端布局（第 4 步微信式改版）**：左侧会话列表 + 中间聊天窗 + 右侧内嵌面板（文件工作区 / 任务 / 成员 / 身份卡 / 模型 / 记忆）；顶栏图标钮开关面板，交付气泡点击直达文件预览。
-- **LLM 配置**：左侧「模型」Tab 填 OpenAI 兼容 Base URL / API Key / 模型名；未配置时 Agent 返回本地占位文本。
+- **LLM 配置**：右侧「模型」面板填 OpenAI 兼容 Base URL / API Key / 模型名；未配置时 Agent 返回本地占位文本、CEO 用占位双子任务模板（全流程仍可跑通）。
 - **环境变量（可选）**：`AGENT_ROOM_PORT`（默认 8899）、`AGENT_ROOM_LLM_BASE_URL` / `AGENT_ROOM_LLM_API_KEY` / `AGENT_ROOM_LLM_MODEL`。
 
 ## 目录
@@ -63,7 +72,9 @@ backend/          FastAPI sidecar
   app/agents/responder.py 内置 Agent 流式回复器 + GenerationRegistry（P0 抢占登记/取消）
   app/mcp_gateway/server.py MCP 接入网关（四件套 + fs 工具 + 双因子令牌校验）
   app/files/       文件工作区（workspace.py 存储与乐观锁 / tools.py 工具 schema / routes.py API）
-  tests/           pytest（网关协议 / 文件工作区 / 工具循环）
+  app/orchestrator/ CEO 编排器（ceo.py 拆解/派发/验收/熔断 / routes.py 任务 API）
+  app/memory/      向量记忆（hub.py 公私隔离向量库 / embeddings.py 可换装 embedding）
+  tests/           pytest（网关 / 文件工作区 / 工具循环 / 编排 / 记忆）
 frontend/         单页前端（原生 HTML/CSS/JS，微信式三栏布局）
 src-tauri/        Tauri 2 壳（Rust 只管窗口与 sidecar 生命周期）
 scripts/          launch-agent-room.vbs 桌面快捷方式启动器
@@ -86,6 +97,10 @@ docs/             设计文档与交接文档
 | POST | `/api/files/write` | 写文件（base_version 乐观锁，人类写不校验） |
 | POST | `/api/files/upload?room_id=` | 上传（multipart，UTF-8 文本） |
 | DELETE | `/api/files` | 删除文件 |
+| GET | `/api/tasks?room_id=` | 任务列表（含子任务状态） |
+| POST | `/api/tasks/{id}/confirm` | 确认开工 / 熔断后恢复（action=resume） |
+| POST | `/api/tasks/{id}/abort` | 作废任务 |
+| GET | `/api/memory?room_id=` | 记忆统计 + 最近记忆（只读） |
 | MCP | `/gateway/mcp` | 接入网关（streamable-http；join_room / poll_messages / send_message / declare_status / fs_list / fs_read / fs_write） |
 | WS | `/ws/{room_id}` | 房间总线（上行发送，下行事件流） |
 
@@ -116,5 +131,5 @@ cd backend && .venv\Scripts\python.exe main.py
 2. ~~第 2 步：双 Agent + 身份卡编辑器、@提及、P0 interrupt 抢占~~ ✅
 3. ~~第 3 步：MCP 接入网关（外部 Agent 进群）~~ ✅（原文件工作区顺延）
 4. ~~第 4 步：文件工作区（fs.read/fs.write + 版本乐观锁）+ UI 改版（参考微信布局）~~ ✅
-5. 第 5 步：CEO 编排闭环 + 向量记忆（Chroma/Qdrant 本地实例）+ 熔断（见 docs/STEP5-HANDOFF.md）
-6. 第 6 步：编排闭环完成后网关侧二次权限校验 + 排产单工具（claim_subtask 等）
+5. ~~第 5 步：CEO 编排闭环 + 向量记忆 + 熔断~~ ✅
+6. 第 6 步：网关侧二次权限校验 + 排产单工具（claim_subtask 等）+ 无人值守开关（见 docs/STEP6-HANDOFF.md）
