@@ -372,10 +372,12 @@ document.querySelectorAll('.rp-tab').forEach(t =>
 $('btn-panel-files').addEventListener('click', () => togglePanel('rp-files'));
 $('btn-panel-members').addEventListener('click', () => togglePanel('rp-members'));
 $('btn-panel-settings').addEventListener('click', () => togglePanel('rp-identity'));
+$('btn-panel-help').addEventListener('click', () => togglePanel('rp-help'));
 document.querySelectorAll('[data-panel]').forEach(b => { b.dataset.panel = ''; });
 $('btn-panel-files').dataset.panel = 'rp-files';
 $('btn-panel-members').dataset.panel = 'rp-members';
 $('btn-panel-settings').dataset.panel = 'rp-identity';
+$('btn-panel-help').dataset.panel = 'rp-help';
 
 $('btn-burger') && $('btn-burger').addEventListener('click', () => $('sidebar').classList.toggle('collapsed'));
 $('btn-send').addEventListener('click', sendText);
