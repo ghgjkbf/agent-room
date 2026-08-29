@@ -98,7 +98,8 @@ def load_identity(agent_id: str) -> dict | None:
 
 
 def build_system_prompt(agent_id: str, identity: dict | None) -> str:
-    sys_parts = ["你是群聊房间里的 AI 助手，简洁回答，遵守身份卡职责。"]
+    sys_parts = ["你是群聊房间里的 AI 助手，简洁回答，遵守身份卡职责。",
+                 "群聊输出规范：禁用 Markdown 标题、表格与代码块围栏（气泡流不是文档），分点用「1.」或「-」，每段不超过 3 行。"]
     if identity:
         role = f"你的标签是「{identity['label']}」"
         if identity["persona"]:

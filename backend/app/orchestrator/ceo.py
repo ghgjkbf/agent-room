@@ -294,11 +294,12 @@ class Orchestrator:
 
     async def _plan(self, goal: str, task_id: str, executors: list[str]) -> list[dict]:
         data = await self._llm_json(
-            "你是 CEO 总编排器：把目标拆解为子任务排产单。只输出 JSON："
+            "你是 CEO 总编排器：把目标拆解为子任务排产单。只输出 JSON（不要多余字段）："
             '{"subtasks":[{"seq":1,"title":"...","assignee":"agent_a",'
             '"depends_on":[],"guidance":"给执行者的具体要求"}]}。'
             f"执行者只能是 {executors}；编排者不执行；子任务不超过 3 个；"
-            "guidance 要写清交付物落哪个文件。")
+            "title 不超过 12 个字；guidance 必须写明交付文件的具体路径（如 docs/xxx.md）"
+            "与可核验的完成标准，禁止空泛表述。")
         subs = (data or {}).get("subtasks") or []
         ok = isinstance(subs, list) and subs and all(
             isinstance(s, dict) and s.get("title") and s.get("assignee") in executors
@@ -313,7 +314,8 @@ class Orchestrator:
     async def _verdict(self, goal: str, sub: dict, delivery_text: str,
                        checks: list[str] | None = None) -> dict:
         user = (f"总目标：{goal}\n子任务：#{sub['seq']} {sub['title']}\n"
-                f"要求：{sub['guidance']}\n交付内容：{delivery_text[:800]}")
+                f"要求：{sub['guidance']}\n交付内容：{delivery_text[:800]}\n"
+                "判定要点：声称写了文件但系统核验为缺失 = 未交付；复述排产单原文不算交付内容。")
         if checks:
             user += "\n系统文件核验结果（声称写了文件时以此为准）：\n" + "\n".join(checks)
         data = await self._llm_json(

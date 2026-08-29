@@ -801,12 +801,112 @@ $('skill-files').addEventListener('change', async () => {
   refreshSkills();
 });
 
+
+/* ---------- 外观（背景/透明度/动效，localStorage 持久化） ---------- */
+const BG_PRESETS = [
+  { id: 'default', name: '默认', css: '' },
+  { id: 'mist', name: '薄雾', css: 'linear-gradient(160deg,#eef2ff 0%,#f6f6f8 55%,#fdf2f8 100%)' },
+  { id: 'dawn', name: '晨曦', css: 'linear-gradient(160deg,#fff7ed 0%,#f6f6f8 50%,#ecfeff 100%)' },
+  { id: 'ink', name: '暮色', css: 'linear-gradient(160deg,#e0e7ff 0%,#f6f6f8 45%,#e0f2fe 100%)' },
+];
+let appearance = Object.assign(
+  { preset: 'default', image: null, mask: 0, bubble: 100, ripple: true },
+  JSON.parse(localStorage.getItem('aroom-appearance') || '{}'));
+
+function saveAppearance() { localStorage.setItem('aroom-appearance', JSON.stringify(appearance)); }
+
+function applyAppearance() {
+  const feed = $('feed');
+  const preset = BG_PRESETS.find(p => p.id === appearance.preset) || BG_PRESETS[0];
+  const mask = `linear-gradient(rgba(246,246,248,${appearance.mask / 100}), rgba(246,246,248,${appearance.mask / 100}))`;
+  if (appearance.image) {
+    feed.style.background = `${mask}, center/cover fixed no-repeat url(${appearance.image})`;
+  } else if (preset.css) {
+    feed.style.background = `${mask}, ${preset.css} fixed`;
+  } else {
+    feed.style.background = '';
+  }
+  document.documentElement.style.setProperty('--bub-a', appearance.bubble / 100);
+  $('mask-v').textContent = appearance.mask;
+  $('bg-mask').value = appearance.mask;
+  $('bub-v').textContent = appearance.bubble;
+  $('bub-opacity').value = appearance.bubble;
+  $('fx-ripple').checked = appearance.ripple;
+  renderBgPresets();
+}
+function renderBgPresets() {
+  const el = $('bg-presets');
+  el.innerHTML = BG_PRESETS.map(p => {
+    const active = !appearance.image && appearance.preset === p.id;
+    return `<div data-preset="${p.id}" title="${p.name}" style="cursor:pointer;height:44px;border-radius:8px;
+      border:2px solid ${active ? 'var(--brand)' : 'var(--line)'};background:${p.css || 'var(--bg)'};
+      display:flex;align-items:end;justify-content:center;font-size:9px;color:var(--muted);padding-bottom:2px;
+      ${p.id === 'default' ? 'background:#f6f6f8;' : ''}">${p.name}</div>`;
+  }).join('');
+  el.querySelectorAll('[data-preset]').forEach(d => d.addEventListener('click', () => {
+    appearance.preset = d.dataset.preset; appearance.image = null; saveAppearance(); applyAppearance();
+  }));
+}
+$('btn-bg-image').addEventListener('click', () => $('bg-file').click());
+$('bg-file').addEventListener('change', () => {
+  const f = $('bg-file').files[0];
+  if (!f) return;
+  if (f.size > 6 * 1024 * 1024) return alertSys('图片请小于 6MB');
+  const rd = new FileReader();
+  rd.onload = () => {
+    try {
+      appearance.image = rd.result; appearance.preset = 'custom';
+      saveAppearance(); applyAppearance();
+      alertSys('背景图已应用（仅存本浏览器）。');
+    } catch (e) { alertSys('图片过大无法本地存储，请换小图。'); }
+  };
+  rd.readAsDataURL(f);
+  $('bg-file').value = '';
+});
+$('btn-bg-reset').addEventListener('click', () => {
+  appearance = { preset: 'default', image: null, mask: 0, bubble: 100, ripple: appearance.ripple };
+  saveAppearance(); applyAppearance(); alertSys('外观已恢复默认。');
+});
+$('bg-mask').addEventListener('input', () => {
+  appearance.mask = +$('bg-mask').value; saveAppearance(); applyAppearance();
+});
+$('bub-opacity').addEventListener('input', () => {
+  appearance.bubble = +$('bub-opacity').value; saveAppearance(); applyAppearance();
+});
+$('fx-ripple').addEventListener('change', () => {
+  appearance.ripple = $('fx-ripple').checked; saveAppearance();
+});
+
+/* ---------- 动态点击效果：波纹 + 气泡弹跳 ---------- */
+document.addEventListener('pointerdown', (e) => {
+  if (!appearance.ripple) return;
+  const t = e.target.closest('.msg.agent, .msg.orch, .send, .btn, .icon-btn, .rp-tab');
+  if (!t) return;
+  const r = t.getBoundingClientRect();
+  const rip = document.createElement('span');
+  const size = Math.max(r.width, r.height);
+  rip.className = 'ripple';
+  rip.style.width = rip.style.height = size + 'px';
+  rip.style.left = (e.clientX - r.left - size / 2) + 'px';
+  rip.style.top = (e.clientY - r.top - size / 2) + 'px';
+  t.classList.add('fx');
+  t.appendChild(rip);
+  setTimeout(() => rip.remove(), 500);
+});
+document.addEventListener('click', (e) => {
+  if (!appearance.ripple) return;
+  const m = e.target.closest('.msg.agent, .msg.orch');
+  if (!m || m.classList.contains('system')) return;
+  m.classList.remove('pop'); void m.offsetWidth; m.classList.add('pop');
+});
+
 /* ---------- 启动 ---------- */
 async function boot() {
   await refreshRooms();
   await refreshIdentities();
   renderToolCheckboxes([]);   // 初始即渲染工具复选框（新建卡状态），一键白名单随时可用
   await refreshSkills();
+  applyAppearance();
   await loadRoomView();
   connect();
 }
