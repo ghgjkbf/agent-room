@@ -56,6 +56,7 @@ function addBubble(msg) {
   }
   feed.appendChild(el);
   feed.scrollTop = feed.scrollHeight;
+  if (kind !== 'system') scheduleFoldCheck(el);
   return el;
 }
 
@@ -68,7 +69,29 @@ function agentLabel(id) {
    必须按 agent_id 各自维护活跃气泡；人类/系统消息终结全部活跃气泡。 */
 let streaming = {}; // agentId -> {el, body}
 
-function finalizeStreaming() { streaming = {}; }
+function finalizeStreaming() {
+  for (const aid in streaming) {
+    const st = streaming[aid];
+    if (st && document.body.contains(st.el)) scheduleFoldCheck(st.el);
+  }
+  streaming = {};
+}
+
+/* ---------- 长气泡折叠/展开（点击收起与展开） ---------- */
+const FOLD_PX = 240;   // 超过此高度的消息自动折叠
+function scheduleFoldCheck(el) {
+  setTimeout(() => {
+    if (!document.body.contains(el)) return;
+    const body = el.querySelector('.body');
+    if (!body || el.classList.contains('expanded') || body.scrollHeight <= FOLD_PX) return;
+    if (el.querySelector('.fold-tip')) return;
+    el.classList.add('folded');
+    const tip = document.createElement('div');
+    tip.className = 'fold-tip';
+    tip.textContent = '⤵ 点击展开全文';
+    el.appendChild(tip);
+  }, 60);
+}
 
 function handleAgentChunk(msg) {
   const st = streaming[msg.sender.id];
@@ -878,6 +901,16 @@ $('fx-ripple').addEventListener('change', () => {
 
 /* ---------- 动态点击效果：波纹 + 气泡弹跳 ---------- */
 document.addEventListener('pointerdown', (e) => {
+  // 折叠气泡的展开/收起挂在 pointerdown：click 落点可能因布局微动漂移而丢失
+  const fm = e.target.closest && e.target.closest('.msg.folded, .msg.expanded');
+  if (fm) {
+    const toExpand = fm.classList.contains('folded');
+    fm.classList.toggle('folded', !toExpand);
+    fm.classList.toggle('expanded', toExpand);
+    const tip = fm.querySelector('.fold-tip');
+    if (tip) tip.textContent = toExpand ? '⤴ 收起' : '⤵ 点击展开全文';
+    return;
+  }
   if (!appearance.ripple) return;
   const t = e.target.closest('.msg.agent, .msg.orch, .send, .btn, .icon-btn, .rp-tab');
   if (!t) return;
@@ -894,8 +927,9 @@ document.addEventListener('pointerdown', (e) => {
 });
 document.addEventListener('click', (e) => {
   if (!appearance.ripple) return;
-  const m = e.target.closest('.msg.agent, .msg.orch');
+  const m = e.target.closest('.msg.agent, .msg.orch, .msg.deliver');
   if (!m || m.classList.contains('system')) return;
+  if (m.classList.contains('folded') || m.classList.contains('expanded')) return; // 已在 pointerdown 处理
   m.classList.remove('pop'); void m.offsetWidth; m.classList.add('pop');
 });
 
