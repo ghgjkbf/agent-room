@@ -39,7 +39,7 @@
 环境：Windows + Python 3.11+（开发环境为 3.14）
 
 ```bash
-git clone <本仓库> agent-room && cd agent-room
+git clone https://github.com/ghgjkbf/agent-room.git agent-room && cd agent-room
 
 # 创建虚拟环境并安装依赖
 cd backend
@@ -126,12 +126,9 @@ cd backend && .venv\Scripts\python -m pytest tests -q
 - [ ] 技能驱动的工作流执行引擎（md 定义结构化步骤，CEO 直接引用为子任务模板）
 - [ ] 部门主管层（L2）、跨房间记忆、成本仪表盘（V2）
 
-详见 [docs/STEP6-HANDOFF.md](docs/STEP6-HANDOFF.md)。
-
 ## 文档
 
 - [docs/CHANGELOG.md](docs/CHANGELOG.md) — 各迭代能力与验收记录
-- [docs/STEP6-HANDOFF.md](docs/STEP6-HANDOFF.md) — 最新交接文档（新会话从这里继续）
 - [docs/2026-08-27-mcp-gateway-design.md](docs/2026-08-27-mcp-gateway-design.md) — 网关设计参考
 
 ## License

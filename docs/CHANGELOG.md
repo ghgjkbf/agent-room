@@ -2,7 +2,7 @@
 
 本文件收录各迭代的能力与验收记录；面向使用者的功能总览见 [README](README.md)。
 
-当前进度：**MVP 第 5 步完成**（CEO 编排闭环 + 向量记忆 + 任务级熔断）；第 6 步增强：API 连通性校验、Agent 专属规范 md、内部技能库（含 .md 文件导入导出）、多群聊（新建/切换）；优化迭代：验收真实性核验、list_rooms、一键白名单、任务详情、全房间归档。**第 6 步交接文档：[docs/STEP6-HANDOFF.md](docs/STEP6-HANDOFF.md)**（新会话从这里继续）。
+当前进度：**MVP 第 5 步完成**（CEO 编排闭环 + 向量记忆 + 任务级熔断）；第 6 步增强：API 连通性校验、Agent 专属规范 md、内部技能库（含 .md 文件导入导出）、多群聊（新建/切换）；优化迭代：验收真实性核验、list_rooms、一键白名单、任务详情、全房间归档。
 
 ## 优化迭代能力清单（验收真实性 + 体验补全）
 
@@ -60,7 +60,7 @@
 - **防死循环**：外部/Agent 广播消息不触发内置 Agent 自动接话，仅显式 @ 才唤起；轮数熔断不辖外部成员。
 - **TRAE stdio 桥**：`backend/mcp_stdio.py`（stdio ↔ HTTP JSON-RPC 透传），供仅支持命令行 MCP 的客户端接入。
 - **安全**：每次工具调用 `(agent_id, token)` 双因子校验，无会话状态，吊销即时生效；失败结构化返回不抛栈。
-- **验收**：pytest 4 例（令牌校验/冒名拒绝/防死循环/幂等去重）全过；SDK ClientSession 模拟外部 Agent join→send→poll 全链路通过；Playwright（系统 Edge）GUI 走查通过；ZCode 经 `d:\ai-use\.zcode\config.json` 注册实测 join/send/poll 全通——第一个真实外部成员。
+- **验收**：pytest 4 例（令牌校验/冒名拒绝/防死循环/幂等去重）全过；SDK ClientSession 模拟外部 Agent join→send→poll 全链路通过；Playwright（系统 Edge）GUI 走查通过；ZCode 经 `.zcode/config.json` 注册实测 join/send/poll 全通——第一个真实外部成员。
 
 ## 第 2 步能力清单（已完成并验收）
 
@@ -165,4 +165,4 @@ cd backend && .venv\Scripts\python.exe main.py
 3. ~~第 3 步：MCP 接入网关（外部 Agent 进群）~~ ✅（原文件工作区顺延）
 4. ~~第 4 步：文件工作区（fs.read/fs.write + 版本乐观锁）+ UI 改版（参考微信布局）~~ ✅
 5. ~~第 5 步：CEO 编排闭环 + 向量记忆 + 熔断~~ ✅
-6. 第 6 步：网关侧二次权限校验 + 排产单工具（claim_subtask 等）+ 无人值守开关（见 docs/STEP6-HANDOFF.md）
+6. 第 6 步：网关侧二次权限校验 + 排产单工具（claim_subtask 等）+ 无人值守开关

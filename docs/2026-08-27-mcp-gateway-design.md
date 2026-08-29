@@ -84,7 +84,7 @@ TRAE 兼容薄桥：`mcp_stdio.py` 独立入口，stdio ↔ HTTP 透传到 `/mcp
 2. **模拟外部端到端**：起后端后用 SDK ClientSession 当「假 TRAE」走完 join → poll → send 全链路
 3. **GUI 双通道验证**：
    - Playwright（可见 Chromium）访问 127.0.0.1:8899 截图验证：添加成员弹窗、token 展示、外部成员气泡、徽标渲染
-   - 网关注册进 `d:\ai-use\.zcode\config.json`，ZCode 本人作为第一个真实外部成员进群实测收发（最硬验收）
+   - 网关注册进 `.zcode/config.json`，ZCode 本人作为第一个真实外部成员进群实测收发（最硬验收）
    - 用户手动在 TRAE 界面添加同一地址，完成「先 ZCode 后 TRAE」闭环
 
 ## 明确不做（YAGNI）
