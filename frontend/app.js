@@ -3,9 +3,13 @@
 
 const $ = (id) => document.getElementById(id);
 let ws = null;
+let currentRoom = 'default';   // 当前会话（第 6 步多房间）
+let rooms = [];                // [{id,name,member_count}]
+let roomLast = {};             // rid -> 最近一条预览文本
+const R = () => currentRoom;
 let agents = [];        // [{id,name,identity_id,identity_label,chat_turns}]
 let identities = [];    // [{id,label,persona,responsibilities,tools_allow,version}]
-const TOOL_OPTIONS = ['fs.read', 'fs.write', 'fs.list', 'shell.run', 'git.status', 'memory.query'];
+const TOOL_OPTIONS = ['fs.read', 'fs.write', 'fs.list', 'skills.list', 'skills.read', 'shell.run', 'git.status', 'memory.query'];
 
 /* ---------- 消息渲染 ---------- */
 function addBubble(msg) {
@@ -115,7 +119,7 @@ function showToolEvent(msg) {
 
 /* ---------- WS ---------- */
 function connect() {
-  ws = new WebSocket('ws://' + location.host + '/ws/default');
+  ws = new WebSocket('ws://' + location.host + '/ws/' + currentRoom);
   ws.onopen = () => setChip('● 已连接', '#10b981');
   ws.onmessage = (ev) => {
     const msg = JSON.parse(ev.data);
@@ -134,7 +138,7 @@ function connect() {
 }
 function setChip(text, color) { $('ws-chip').textContent = text; $('ws-chip').style.color = color; }
 
-/* 左栏会话项的「最后一条」摘要 */
+/* 左栏会话项的「最后一条」摘要（多房间：存 roomLast 再重渲染） */
 function updateConvoLast(msg) {
   const text = (msg.payload && msg.payload.text) || '';
   if (!text) return;
@@ -143,9 +147,12 @@ function updateConvoLast(msg) {
     const meta = agents.find(a => a.id === msg.sender.id);
     who = meta ? meta.name : msg.sender.id;
   } else if (msg.sender.kind === 'system') who = '';
-  $('convo-last').textContent = (who ? who + '：' : '') + text.slice(0, 40);
   const t = new Date();
-  $('convo-time').textContent = `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`;
+  roomLast[currentRoom] = {
+    text: (who ? who + '：' : '') + text.slice(0, 40),
+    time: `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`,
+  };
+  renderRooms();
 }
 
 function sendText() {
@@ -174,9 +181,9 @@ function updateScopeTip(mentions) {
 
 /* ---------- 成员列表（含换绑 + 外部成员） ---------- */
 async function refreshMembers() {
-  const res = await fetch('/api/agents'); agents = await res.json();
+  const res = await fetch(`/api/agents?room_id=${currentRoom}`); agents = await res.json();
   $('agent-count').textContent = agents.length;
-  $('convo-count').textContent = '· ' + agents.length + ' 成员';
+  renderRooms();
   $('member-list').innerHTML = agents.map((a) => {
     const external = a.kind === 'external';
     const online = a.status === 'online';
@@ -403,7 +410,13 @@ $('btn-save-llm').addEventListener('click', async () => {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg),
   })).json();
   $('llm-chip').textContent = r.llm_ready ? 'LLM 已配置' : 'LLM 未配置';
-  alertSys(r.llm_ready ? 'LLM 配置已保存，后续回复将走真实模型。' : '配置不完整。');
+  alertSys(r.llm_ready ? 'LLM 配置已保存，正在校验连通性…' : '配置不完整。');
+  if (!r.llm_ready) return;
+  const tr = await (await fetch('/api/llm-test', { method: 'POST' })).json();
+  $('llm-test-result').textContent = tr.ok
+    ? `✓ 连接成功 · 模型 ${tr.model} · 延迟 ${tr.latency_ms}ms · 端点回复「${(tr.reply || '').slice(0, 20)}」`
+    : `✗ 连接失败：${tr.error}`;
+  alertSys(tr.ok ? `API 校验通过（${tr.latency_ms}ms）。` : `API 校验失败：${(tr.error || '').slice(0, 80)}`);
 });
 $('btn-new-id').addEventListener('click', () => { loadCard(null); });
 $('btn-save-id').addEventListener('click', saveCard);
@@ -450,7 +463,7 @@ $('btn-ext-create').addEventListener('click', async () => {
   if (!name) return alertSys('请填写成员名称');
   const r = await fetch('/api/agents/external', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, identity_id: $('ext-identity').value || null }),
+    body: JSON.stringify({ name, identity_id: $('ext-identity').value || null, room_id: currentRoom }),
   });
   if (!r.ok) return alertSys('创建失败：' + JSON.stringify(await r.json()));
   const d = await r.json();
@@ -469,7 +482,7 @@ let files = [];          // [{path, version, author, updated_at}]
 let previewedFile = null; // {path, version} 当前预览的文件
 
 async function refreshFiles() {
-  const res = await fetch('/api/files?room_id=default');
+  const res = await fetch(`/api/files?room_id=${currentRoom}`);
   if (!res.ok) return;
   files = await res.json();
   const tree = {};
@@ -495,7 +508,7 @@ async function refreshFiles() {
       if (!confirm(`删除文件 ${p}？`)) return;
       await fetch('/api/files', {
         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ room_id: 'default', path: p }),
+        body: JSON.stringify({ room_id: currentRoom, path: p }),
       });
       if (previewedFile && previewedFile.path === p) { previewedFile = null; $('file-preview').value = ''; $('file-preview-head').textContent = '点文件名预览'; }
       refreshFiles();
@@ -504,7 +517,7 @@ async function refreshFiles() {
 }
 
 async function previewFile(path) {
-  const res = await fetch('/api/files/content?room_id=default&path=' + encodeURIComponent(path));
+  const res = await fetch(`/api/files/content?room_id=${currentRoom}&path=` + encodeURIComponent(path));
   if (!res.ok) return alertSys((await res.json()).detail || '读取失败');
   const d = await res.json();
   previewedFile = { path: d.path, version: d.version };
@@ -518,7 +531,7 @@ $('file-input').addEventListener('change', async () => {
   if (!f) return;
   const fd = new FormData();
   fd.append('file', f);
-  const r = await fetch('/api/files/upload?room_id=default', { method: 'POST', body: fd });
+  const r = await fetch(`/api/files/upload?room_id=${currentRoom}`, { method: 'POST', body: fd });
   if (!r.ok) return alertSys('上传失败：' + ((await r.json()).detail || r.status));
   const d = await r.json();
   alertSys(`已上传 ${d.path}（v${d.version}）`);
@@ -530,7 +543,7 @@ $('btn-save-preview').addEventListener('click', async () => {
   const r = await fetch('/api/files/write', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      room_id: 'default', path: previewedFile.path,
+      room_id: currentRoom, path: previewedFile.path,
       content: $('file-preview').value, base_version: previewedFile.version,
     }),
   });
@@ -558,7 +571,7 @@ const SUB_CHIP = { pending: '待派发', dispatched: '执行中', accepted: '已
 const TASK_ST = { awaiting_confirm: '待确认', running: '执行中', paused: '已熔断·待裁决', done: '已完成', aborted: '已作废' };
 
 async function fetchTasks() {
-  const res = await fetch('/api/tasks?room_id=default');
+  const res = await fetch(`/api/tasks?room_id=${currentRoom}`);
   if (!res.ok) return;
   renderTasks((await res.json()).tasks || []);
 }
@@ -605,7 +618,7 @@ $('btn-issue-task').addEventListener('click', () => {
 });
 
 async function refreshMemory() {
-  const res = await fetch('/api/memory?room_id=default');
+  const res = await fetch(`/api/memory?room_id=${currentRoom}`);
   if (!res.ok) return;
   const d = await res.json();
   const s = d.stats || {};
@@ -617,16 +630,114 @@ async function refreshMemory() {
     : '<div class="hint">（暂无记忆；任务验收通过后自动沉淀）</div>';
 }
 
-/* ---------- 启动 ---------- */
-async function boot() {
-  const data = await (await fetch('/api/room/default')).json();
+/* ---------- 多房间（第 6 步）：会话列表 / 新建群聊 / 切换 ---------- */
+async function refreshRooms() {
+  rooms = await (await fetch('/api/rooms')).json();
+  renderRooms();
+}
+function renderRooms() {
+  const el = $('room-list');
+  el.innerHTML = rooms.map(r => {
+    const last = roomLast[r.id] || (r.id === currentRoom ? { text: '— 新会话，说点什么吧 —', time: '现在' } : {});
+    return `<div class="convo ${r.id === currentRoom ? 'active' : ''}" data-room="${r.id}">
+      <div class="convo-avatar">${esc((r.name || '?')[0])}</div>
+      <div class="convo-info">
+        <div class="convo-name">${esc(r.name)} <span class="cnt">· ${r.member_count} 成员</span></div>
+        <div class="convo-last">${esc(last.text || ' ')}</div>
+      </div>
+      <div class="convo-time">${esc(last.time || '')}</div>
+    </div>`;
+  }).join('');
+  el.querySelectorAll('.convo').forEach(c =>
+    c.addEventListener('click', () => switchRoom(c.dataset.room)));
+  $('room-name').textContent = (rooms.find(r => r.id === currentRoom) || {}).name || currentRoom;
+}
+async function switchRoom(rid) {
+  if (rid === currentRoom) return;
+  currentRoom = rid;
+  if (ws) { ws.onclose = null; ws.onerror = null; ws.close(); ws = null; }
+  $('feed').innerHTML = '';
+  $('file-tree').innerHTML = '<div class="hint">（加载中…）</div>';
+  $('file-preview').value = ''; previewedFile = null;
+  $('task-list').innerHTML = ''; $('mem-list').innerHTML = '';
+  renderRooms();
+  await loadRoomView();
+  connect();
+  alertSys(`已切换到「${(rooms.find(r => r.id === currentRoom) || {}).name || currentRoom}」。`);
+}
+async function loadRoomView() {
+  const data = await (await fetch('/api/room/' + currentRoom)).json();
   $('llm-chip').textContent = data.llm_ready ? 'LLM 已配置' : 'LLM 未配置';
-  await refreshIdentities();
   await refreshMembers();
   await refreshFiles();
   await fetchTasks();
   await refreshMemory();
-  connect();
   (data.history || []).forEach(m => handleMessage(m));
+}
+
+/* 新建群聊弹窗 */
+$('btn-new-room').addEventListener('click', async () => {
+  const all = await (await fetch('/api/agents?all=1')).json();
+  $('room-agent-picks').innerHTML = all.map(a =>
+    `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;">
+      <input type="checkbox" value="${a.id}" ${a.id === 'agent_a' || a.id === 'agent_b' ? '' : ''}>
+      ${esc(a.name)}<span class="kind-badge ${a.kind === 'external' ? 'external' : 'internal'}">${a.kind === 'external' ? '外部' : '内置'}</span>
+    </label>`).join('') || '<div class="hint">（暂无成员）</div>';
+  $('room-name-in').value = '';
+  $('room-modal-mask').classList.add('on');
+});
+$('btn-room-cancel').addEventListener('click', () => $('room-modal-mask').classList.remove('on'));
+$('btn-room-create').addEventListener('click', async () => {
+  const name = $('room-name-in').value.trim();
+  if (!name) return alertSys('请填写群聊名称');
+  const ids = [...$('room-agent-picks').querySelectorAll('input:checked')].map(i => i.value);
+  const r = await (await fetch('/api/rooms', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, agent_ids: ids }),
+  })).json();
+  if (!r.ok) return alertSys(r.detail || '创建失败');
+  $('room-modal-mask').classList.remove('on');
+  await refreshRooms();
+  await switchRoom(r.id);
+});
+
+/* ---------- 内部技能库（第 6 步） ---------- */
+async function refreshSkills() {
+  const list = await (await fetch('/api/skills')).json();
+  const el = $('skill-list');
+  el.innerHTML = list.length ? list.map(s =>
+    `<div class="mem-item"><b>${esc(s.name)}</b>.md
+      <div class="mem-meta">${s.chars} 字符 · <button class="mini-btn" data-skill="${esc(s.name)}" style="color:#b42318;">删除</button></div>
+    </div>`).join('')
+    : '<div class="hint">（暂无技能；在下方添加，或参考内置示例）</div>';
+  el.querySelectorAll('button[data-skill]').forEach(b => b.addEventListener('click', async () => {
+    if (!confirm(`删除技能「${b.dataset.skill}」？`)) return;
+    const r = await fetch(`/api/skills/${b.dataset.skill}`, { method: 'DELETE' });
+    if (!r.ok) return alertSys('删除失败');
+    alertSys('技能已删除'); refreshSkills();
+  }));
+}
+$('btn-save-skill').addEventListener('click', async () => {
+  const name = $('skill-name').value.trim();
+  const content = $('skill-content').value;
+  if (!name) return alertSys('请填写技能名');
+  if (!content.trim()) return alertSys('请填写技能内容');
+  const r = await (await fetch('/api/skills', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, content }),
+  })).json();
+  if (!r.ok && !r.name) return alertSys(r.detail || '保存失败');
+  $('skill-name').value = ''; $('skill-content').value = '';
+  alertSys(`技能「${name}」已保存，Agent 经 skills.* 工具即可使用。`);
+  refreshSkills();
+});
+
+/* ---------- 启动 ---------- */
+async function boot() {
+  await refreshRooms();
+  await refreshIdentities();
+  await refreshSkills();
+  await loadRoomView();
+  connect();
 }
 boot();

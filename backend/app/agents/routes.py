@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.db import db
+from app.core.message import now_cst
 
 router = APIRouter(prefix="/api/agents")
 
@@ -29,6 +30,7 @@ class BindIn(BaseModel):
 class ExternalAgentIn(BaseModel):
     name: str
     identity_id: str | None = None
+    room_id: str = "default"
 
 
 def _ensure_internal(conn):
@@ -39,21 +41,33 @@ def _ensure_internal(conn):
                 "INSERT INTO agents (id, room_id, name, kind) VALUES (?, 'default', ?, 'internal')",
                 (a["id"], a["name"]),
             )
+        conn.execute(
+            "INSERT OR IGNORE INTO room_members (room_id, agent_id, joined_at)"
+            " VALUES ('default', ?, ?)", (a["id"], now_cst()))
 
 
 @router.get("")
-async def list_agents():
+async def list_agents(room_id: str = "default", all: int = 0):
     with db() as conn:
         _ensure_internal(conn)
         # 兜底：身份卡被直接删库等历史操作造成的悬空引用 → 视为未绑定并清理
         conn.execute(
             "UPDATE agents SET identity_id=NULL WHERE identity_id IS NOT NULL AND"
             " identity_id NOT IN (SELECT id FROM identities)")
-        rows = conn.execute(
-            "SELECT a.*, i.label AS identity_label FROM agents a"
-            " LEFT JOIN identities i ON i.id = a.identity_id"
-            " WHERE a.room_id='default' ORDER BY a.id"
-        ).fetchall()
+        if all:
+            # 注册表全量（新建群聊选成员用）
+            rows = conn.execute(
+                "SELECT a.*, i.label AS identity_label FROM agents a"
+                " LEFT JOIN identities i ON i.id = a.identity_id ORDER BY a.id"
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT a.*, i.label AS identity_label FROM room_members m"
+                " JOIN agents a ON a.id = m.agent_id"
+                " LEFT JOIN identities i ON i.id = a.identity_id"
+                " WHERE m.room_id=? ORDER BY a.id",
+                (room_id,),
+            ).fetchall()
     return [
         {
             "id": r["id"],
@@ -120,13 +134,20 @@ async def create_external_agent(body: ExternalAgentIn):
             ).fetchone()
             if not card:
                 raise HTTPException(404, "identity not found")
+        room = conn.execute("SELECT id FROM rooms WHERE id=?", (body.room_id,)).fetchone()
+        if not room:
+            raise HTTPException(404, "房间不存在")
         conn.execute(
             "INSERT INTO agents (id, room_id, name, identity_id, kind, status)"
-            " VALUES (?, 'default', ?, ?, 'external', 'offline')",
-            (aid, body.name.strip(), body.identity_id or None),
+            " VALUES (?, ?, ?, ?, 'external', 'offline')",
+            (aid, body.room_id, body.name.strip(), body.identity_id or None),
         )
+        conn.execute(
+            "INSERT OR IGNORE INTO room_members (room_id, agent_id, joined_at)"
+            " VALUES (?,?,?)", (body.room_id, aid, now_cst()))
         token = _issue_token(conn, aid)
-    return {"ok": True, "id": aid, "name": body.name.strip(), "token": token}
+    return {"ok": True, "id": aid, "name": body.name.strip(), "token": token,
+            "room_id": body.room_id}
 
 
 @router.post("/{aid}/rotate-token")
@@ -156,4 +177,5 @@ async def delete_agent(aid: str):
         if (agent["kind"] or "internal") != "external":
             raise HTTPException(400, "内置 Agent 不可删除")
         conn.execute("DELETE FROM agents WHERE id=?", (aid,))
+        conn.execute("DELETE FROM room_members WHERE agent_id=?", (aid,))
     return {"ok": True, "id": aid, "name": agent["name"]}

@@ -16,17 +16,19 @@ from app.agents import routes as agent_routes
 from app.agents.responder import GenerationRegistry, plan_replies, respond_agent
 from app.core.config import BASE_DIR, settings
 from app.core.db import db
-from app.core.message import Message
+from app.core.message import Message, now_cst
 from app.files import routes as file_routes
 from app.identities import routes as identity_routes
 from app.memory import routes as memory_routes
 from app.mcp_gateway.server import mount_gateway
 from app.orchestrator import routes as task_routes
 from app.orchestrator.ceo import OrchestratorRegistry
+from app.rooms import routes as room_routes
 from app.rooms.bus import BusRegistry
 from app.rooms.janitor import janitor_loop
+from app.skills import routes as skill_routes
 
-app = FastAPI(title="agent-room", version="0.5.5")
+app = FastAPI(title="agent-room", version="0.6.0")
 
 
 @asynccontextmanager
@@ -43,6 +45,8 @@ app.include_router(agent_routes.router)
 app.include_router(file_routes.router)
 app.include_router(task_routes.router)
 app.include_router(memory_routes.router)
+app.include_router(room_routes.router)
+app.include_router(skill_routes.router)
 mount_gateway(app, BusRegistry)  # 包装上面的 lifespan，追加 MCP session_manager
 
 
@@ -57,8 +61,6 @@ async def get_default_room():
     with db() as conn:
         row = conn.execute("SELECT * FROM rooms WHERE id='default'").fetchone()
         if not row:
-            from app.core.message import now_cst
-
             conn.execute(
                 "INSERT INTO rooms (id, name, created_at) VALUES ('default', '主房间', ?)",
                 (now_cst(),),
@@ -70,10 +72,15 @@ async def get_default_room():
                     "INSERT INTO agents (id, room_id, name, kind) VALUES (?, 'default', ?, 'internal')",
                     (aid, name),
                 )
+        # 成员归属关系幂等补齐（第 6 步 room_members）
+        conn.execute(
+            "INSERT OR IGNORE INTO room_members (room_id, agent_id, joined_at)"
+            " SELECT room_id, id, ? FROM agents WHERE room_id='default'", (now_cst(),))
         agents = conn.execute(
-            "SELECT a.*, i.label AS identity_label FROM agents a"
+            "SELECT a.*, i.label AS identity_label FROM room_members m"
+            " JOIN agents a ON a.id = m.agent_id"
             " LEFT JOIN identities i ON i.id=a.identity_id"
-            " WHERE a.room_id='default' ORDER BY a.id"
+            " WHERE m.room_id='default' ORDER BY a.id"
         ).fetchall()
         history = conn.execute(
             "SELECT * FROM messages WHERE room_id='default' AND invalidated=0 ORDER BY id"
@@ -94,6 +101,25 @@ async def get_default_room():
         "history": [Message.from_row(r).to_dict() for r in history],
         "llm_ready": llm_ready,
     }
+
+
+_LLM_KEYS = ("llm_base_url", "llm_api_key", "llm_model", "llm_embedding_model")
+
+
+def _load_llm_config():
+    """LLM 配置持久化：启动时从 kv 表读回（set_llm_config 写入）。
+
+    MVP 决策修订：密钥落本机 agent_room.db（已 gitignore，不出本机），
+    换取「重启不丢配置」；V2 再迁加密存储。
+    """
+    with db() as conn:
+        for key in _LLM_KEYS:
+            row = conn.execute("SELECT v FROM kv WHERE k=?", ("llm_" + key,)).fetchone()
+            if row and row["v"]:
+                setattr(settings, key, row["v"])
+
+
+_load_llm_config()
 
 
 @app.post("/api/llm-config")
@@ -117,8 +143,43 @@ async def set_llm_config(cfg: dict):
         settings.llm_api_key = cfg["api_key"].strip()
     if "model" in cfg:
         settings.llm_model = _norm(cfg["model"])
+    # 持久化到 kv（重启自动读回；单项更新只写传入字段，其余保留）
+    with db() as conn:
+        for key in ("llm_base_url", "llm_api_key", "llm_model"):
+            local = {"llm_base_url": "base_url", "llm_api_key": "api_key",
+                     "llm_model": "model"}[key]
+            if local in cfg:
+                conn.execute(
+                    "INSERT INTO kv (k, v) VALUES (?,?)"
+                    " ON CONFLICT(k) DO UPDATE SET v=excluded.v",
+                    ("llm_" + key, getattr(settings, key)))
     ready = bool(settings.llm_base_url and settings.llm_api_key and settings.llm_model)
     return {"ok": True, "llm_ready": ready, "model": settings.llm_model}
+
+
+@app.post("/api/llm-test")
+async def test_llm():
+    """API 连通性校验：向已配置端点发一条最小对话请求，确认链路可用。"""
+    import time
+
+    if not (settings.llm_base_url and settings.llm_api_key and settings.llm_model):
+        return {"ok": False, "error": "LLM 未配置（先填 Base URL / API Key / 模型名）"}
+    try:
+        from openai import AsyncOpenAI
+
+        client = AsyncOpenAI(base_url=settings.llm_base_url, api_key=settings.llm_api_key,
+                             timeout=20, max_retries=0)
+        t0 = time.monotonic()
+        r = await client.chat.completions.create(
+            model=settings.llm_model,
+            messages=[{"role": "user", "content": "连接测试：请只回复两个字：成功"}],
+            max_tokens=16, temperature=0)
+        ms = int((time.monotonic() - t0) * 1000)
+        reply = (r.choices[0].message.content or "").strip() if r.choices else ""
+        return {"ok": True, "latency_ms": ms, "model": settings.llm_model, "reply": reply}
+    except Exception as e:
+        return {"ok": False, "model": settings.llm_model,
+                "error": f"{type(e).__name__}: {str(e)[:300]}"}
 
 
 async def _ws_loop(ws: WebSocket, bus, client_id: str):
@@ -150,7 +211,9 @@ async def _ws_loop(ws: WebSocket, bus, client_id: str):
         if mtype == "chat":
             with db() as conn:
                 rows = conn.execute(
-                    "SELECT id, name FROM agents WHERE room_id=? ORDER BY id",
+                    "SELECT a.id, a.name FROM room_members m"
+                    " JOIN agents a ON a.id = m.agent_id"
+                    " WHERE m.room_id=? ORDER BY a.id",
                     (bus.room_id,),
                 ).fetchall()
             online = [{"id": r["id"], "name": r["name"]} for r in rows]

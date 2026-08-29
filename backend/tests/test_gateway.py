@@ -21,13 +21,14 @@ def _make_external(name: str = "TRAE·测试"):
 
     from app.agents.routes import create_external_agent
 
-    r = asyncio.run(create_external_agent(type("B", (), {"name": name, "identity_id": None})()))
+    r = asyncio.run(create_external_agent(type("B", (), {"name": name, "identity_id": None, "room_id": "default"})()))
     return r["id"], r["token"]
 
 
 def _cleanup(aid: str):
     with db() as conn:
         conn.execute("DELETE FROM messages WHERE sender_id=?", (aid,))
+        conn.execute("DELETE FROM room_members WHERE agent_id=?", (aid,))
         conn.execute("DELETE FROM agents WHERE id=?", (aid,))
 
 

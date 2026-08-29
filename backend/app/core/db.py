@@ -9,6 +9,7 @@ import threading
 from contextlib import contextmanager
 
 from app.core.config import BASE_DIR
+from app.core.message import now_cst
 
 DB_PATH = os.path.join(BASE_DIR, "agent_room.db")
 _lock = threading.Lock()
@@ -112,6 +113,12 @@ CREATE TABLE IF NOT EXISTS kv (
   k TEXT PRIMARY KEY,
   v TEXT
 );
+CREATE TABLE IF NOT EXISTS room_members (
+  room_id TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  joined_at TEXT,
+  PRIMARY KEY (room_id, agent_id)
+);
 """
 
 # 迁移后 messages 新增列：完整文本聚合列 + 分片序号/终止标记（协议扩展，旧库自动补）
@@ -164,6 +171,11 @@ def init_db():
         conn.execute(
             "CREATE UNIQUE INDEX IF NOT EXISTS idx_files_room_path ON files(room_id, path)"
         )
+        # 第 6 步多房间：成员归属关系表（agents 表保留为全局注册表）；
+        # 迁移：把 agents 表现有行映射为成员关系（幂等）
+        conn.execute(
+            "INSERT OR IGNORE INTO room_members (room_id, agent_id, joined_at)"
+            " SELECT room_id, id, ? FROM agents", (now_cst(),))
         _migrate_messages(conn)
 
 

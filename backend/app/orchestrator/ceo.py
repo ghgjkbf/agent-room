@@ -349,8 +349,9 @@ class Orchestrator:
     def _executors(self) -> list[str]:
         with db() as conn:
             rows = conn.execute(
-                "SELECT id FROM agents WHERE room_id=? AND (kind='internal' OR kind IS NULL)"
-                " ORDER BY id", (self.room_id,)).fetchall()
+                "SELECT a.id FROM room_members m JOIN agents a ON a.id = m.agent_id"
+                " WHERE m.room_id=? AND (a.kind='internal' OR a.kind IS NULL)"
+                " ORDER BY a.id", (self.room_id,)).fetchall()
         return [r["id"] for r in rows] or ["agent_a", "agent_b"]
 
 

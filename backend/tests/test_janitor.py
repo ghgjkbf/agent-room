@@ -137,6 +137,7 @@ def test_delete_member_api():
         class _Body:
             name = "待删除·测试"
             identity_id = None
+            room_id = "default"
         created = await create_external_agent(_Body())
         aid = created["id"]
         r = await delete_agent(aid)

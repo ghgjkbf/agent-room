@@ -228,23 +228,17 @@
     </div>
     <div class="cl-search">🔍 搜索会话（MVP 占位）</div>
     <div class="cl-group">会话</div>
-    <div class="convo active" id="convo-main">
-      <div class="convo-avatar">主</div>
-      <div class="convo-info">
-        <div class="convo-name">主房间 <span class="cnt" id="convo-count">· 0 成员</span></div>
-        <div class="convo-last" id="convo-last">— 新会话，说点什么吧 —</div>
-      </div>
-      <div class="convo-time" id="convo-time">现在</div>
-    </div>
+    <div id="room-list"></div>
     <div class="cl-footer">
-      <button class="btn primary sm" id="btn-add-external">＋ 添加外部成员</button>
+      <button class="btn primary sm" id="btn-new-room" style="margin-bottom:6px;width:100%;">＋ 新建群聊</button>
+      <button class="btn ghost sm" id="btn-add-external" style="width:100%;">＋ 添加外部成员</button>
     </div>
   </aside>
 
   <!-- 右侧：聊天窗 -->
   <main id="chat-view">
     <div class="topbar">
-      <span class="room-name">主房间</span>
+      <span class="room-name" id="room-name">主房间</span>
       <span class="chip" id="ws-chip">● 连接中…</span>
       <span class="chip" id="llm-chip">LLM 未配置</span>
       <span class="spacer"></span>
@@ -276,6 +270,7 @@
       <div class="rp-tab" data-rp="rp-identity">身份卡</div>
       <div class="rp-tab" data-rp="rp-model">模型</div>
       <div class="rp-tab" data-rp="rp-memory">记忆</div>
+      <div class="rp-tab" data-rp="rp-skills">技能</div>
       <div class="rp-tab" data-rp="rp-help">帮助</div>
     </div>
 
@@ -349,7 +344,8 @@
       <label class="f">模型名</label>
       <input type="text" id="llm-model" placeholder="gpt-4o-mini / deepseek-chat …">
       <button class="btn primary" id="btn-save-llm">保存并连接</button>
-      <div class="hint">密钥仅存服务端进程内存，前端零持久化；V2 迁移到加密存储与多模型插槽。</div>
+      <div class="hint" id="llm-test-result">保存后会自动向端点发一条测试消息验证连通性。</div>
+      <div class="hint">配置保存后自动发一条测试消息校验连通性；配置存本机数据库（重启不丢，不出本机）；V2 迁移加密存储与多模型插槽。</div>
     </div>
 
     <div class="rp-body" id="rp-memory">
@@ -357,6 +353,18 @@
       <div id="mem-stats" class="hint" style="margin-bottom:8px;"></div>
       <div id="mem-list"></div>
       <div class="hint">公共记忆：任务验收通过后沉淀；私有记忆：Agent 交付时写入、仅本人可读。检索 top-k 自动注入 Agent 上下文并标注来源时间。闲聊不入库。</div>
+    </div>
+
+    <div class="rp-body" id="rp-skills">
+      <div class="grp">内部技能库 · 供群里 Agent 使用</div>
+      <div class="hint" style="margin-bottom:8px;">技能 = 写法规范 / 模板 / 工作流（md 文档）。Agent 绑定含 skills.* 白名单的身份卡后，可在对话中自查技能并照做。</div>
+      <div id="skill-list"></div>
+      <div class="grp" style="margin-top:12px;">添加 / 更新技能</div>
+      <label class="f">技能名（字母/数字/连字符，如 meeting-notes）</label>
+      <input type="text" id="skill-name" placeholder="weekly-report">
+      <label class="f">技能内容（Markdown：用途 / 工作流 / 模板 / 要求）</label>
+      <textarea id="skill-content" rows="8" placeholder="# 技能名&#10;&#10;用途：…&#10;## 工作流&#10;1. …&#10;## 模板&#10;…&#10;## 要求&#10;- …" style="width:100%;"></textarea>
+      <button class="btn primary sm" id="btn-save-skill" style="margin-top:6px;">保存技能</button>
     </div>
 
     <div class="rp-body" id="rp-help">
@@ -372,19 +380,37 @@
       <div class="help-item"><b>外部成员管理</b>：「＋添加外部成员」创建后发放一次性令牌与 MCP 接入配置（可复制）；未绑定时可「复制令牌」重发（旧令牌即刻失效）；✕ 可删除成员。</div>
       <div class="help-item"><b>任务面板</b>：实时显示任务状态（待确认 / 执行中 / 已熔断 / 已完成）与每个子任务进度 chips；熔断暂停后可「继续执行」或「终止」。</div>
       <div class="help-item"><b>向量记忆</b>：公共记忆（任务验收后沉淀，全员可查）与 Agent 私有记忆（仅本人可读）物理隔离；Agent 工作时自动检索相关记忆注入上下文并标注来源时间。<b>互聊不设上限</b>，聊天记录由 Agent B 定时总结归档进公共记忆并清理存储，因此「文件/任务」等关键消息永久保留、纯聊天记录会被归档。</div>
-      <div class="help-item"><b>模型配置</b>：「模型」面板填 OpenAI 兼容端点（Base URL / API Key / 模型名）即接入真实 LLM；未配置时全系统跑<b>占位模式</b>（功能链路完整可演示）。</div>
+      <div class="help-item"><b>模型配置</b>：「模型」面板填 OpenAI 兼容端点（Base URL / API Key / 模型名）即接入真实 LLM；保存后会<b>自动发一条测试消息校验连通性</b>（显示延迟与端点回复）。未配置时全系统跑<b>占位模式</b>（功能链路完整可演示）。</div>
+      <div class="help-item"><b>多群聊</b>：左栏「＋新建群聊」可创建新群并勾选成员（内置 / 外部均可拉入）；每个群独立的消息流、文件工作区、任务与记忆，点击左栏会话项随时切换。</div>
+      <div class="help-item"><b>技能库</b>：「技能」面板维护供 Agent 使用的写法规范 / 模板 / 工作流（md 文档）。给 Agent 绑定含 skills.list / skills.read 白名单的身份卡，它就能在对话中自查技能并照做。</div>
 
       <div class="grp" style="margin-top:14px;">❓ 常见问题</div>
       <div class="help-item"><b>Q：回复都是「占位」？</b><br>A：LLM 未配置。到「模型」面板接入 OpenAI 兼容端点即可。</div>
       <div class="help-item"><b>Q：保存文件提示版本冲突？</b><br>A：他人（或 Agent）在你编辑期间已更新该文件。系统已自动刷新为最新版，重新保存即可——这是乐观锁在防止互相覆盖。</div>
       <div class="help-item"><b>Q：之前的聊天记录去哪了？</b><br>A：被 Agent B 定时归档——摘要已沉淀到「记忆」面板的公共记忆，原文已清理以节省存储。任务、验收等关键消息永久保留。</div>
       <div class="help-item"><b>Q：任务卡在「已熔断·待裁决」？</b><br>A：任务执行期间互聊超限（默认 12 条），系统暂停并等你裁决：到「任务」面板选「继续执行」或「终止」。</div>
-      <div class="help-item"><b>Q：怎么让本机其他 Agent 进群？</b><br>A：本系统可接入多种 Agent——「成员」面板 → ＋添加外部成员 → 复制弹窗里的令牌与接入配置，按你的 Agent 支持的方式粘贴（支持 MCP HTTP 的用 HTTP 配置；仅支持命令行 MCP 的用 stdio 桥命令），保存后即可经网关收发消息、读写文件、承接任务。</div>
+      <div class="help-item"><b>Q：怎么让本机其他 Agent 进群 / 建新群？</b><br>A：本系统可接入多种 Agent——「成员」面板 → ＋添加外部成员 → 复制弹窗里的令牌与接入配置，按你的 Agent 支持的方式粘贴（支持 MCP HTTP 的用 HTTP 配置；仅支持命令行 MCP 的用 stdio 桥命令），保存后即可经网关收发消息、读写文件、承接任务。</div>
 
       <div class="grp" style="margin-top:14px;">🗺️ 路线图</div>
       <div class="hint">已完成：群聊协作 → 身份卡/提及/P0 → MCP 网关（外部进群）→ 文件工作区 + 微信式界面 → CEO 编排闭环 + 向量记忆 + 熔断。进行中：外部 Agent 承接排产单、网关二次权限校验、无人值守自动接活（详见 docs/STEP6-HANDOFF.md）。</div>
     </div>
   </aside>
+</div>
+
+<!-- 新建群聊弹窗 -->
+<div class="modal-mask" id="room-modal-mask">
+  <div class="modal">
+    <h3>新建群聊</h3>
+    <label class="f">群聊名称</label>
+    <input type="text" id="room-name-in" placeholder="如：项目攻坚群">
+    <label class="f">选择加入的成员（可多选）</label>
+    <div id="room-agent-picks" style="max-height:200px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px;"></div>
+    <div class="row" style="display:flex;gap:8px;margin-top:12px;">
+      <button class="btn primary" id="btn-room-create" style="margin-top:0;flex:1;">创建并进入</button>
+      <button class="btn ghost" id="btn-room-cancel" style="margin-top:0;flex:1;">取消</button>
+    </div>
+    <div class="hint">文件工作区 / 任务 / 记忆按群聊独立隔离；外部成员被拉入后可用其网关工具传 room_id 在该群收发。</div>
+  </div>
 </div>
 
 <!-- 添加外部成员弹窗 -->

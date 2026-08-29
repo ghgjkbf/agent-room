@@ -2,7 +2,14 @@
 
 基于 [agent-collab-system-design-doc.html](../../agent-collab-system-design-doc.html) v1.2 设计文档实现的桌面程序。定位：服务电脑上的 Agent——让本机多个 Agent（内置 LLM Agent + TRAE/ZCode 等外部 Agent）像拉群一样进同一房间交流协作。
 
-当前进度：**MVP 第 5 步完成**（CEO 编排闭环 + 向量记忆 + 任务级熔断）；第 5.5 步迭代：互聊不设上限 + Agent B 定时归档清理 + 删除成员 + 外部成员绑定状态按钮切换。**第 6 步交接文档：[docs/STEP6-HANDOFF.md](docs/STEP6-HANDOFF.md)**（新会话从这里继续）。
+当前进度：**MVP 第 5 步完成**（CEO 编排闭环 + 向量记忆 + 任务级熔断）；第 6 步增强：API 连通性校验、Agent 专属规范 md、内部技能库、多群聊（新建/切换）。**第 6 步交接文档：[docs/STEP6-HANDOFF.md](docs/STEP6-HANDOFF.md)**（新会话从这里继续）。
+
+## 第 6 步增强能力清单（已完成并验收）
+
+- **API 连通性校验**：「模型」面板保存后自动向端点发一条最小对话请求（`POST /api/llm-test`，20s 超时、零重试），显示延迟 / 端点回复 / 错误详情；LLM 配置改为落本机 kv 表（重启不丢）。
+- **Agent 专属规范 md**：`backend/agent_md/agent_a.md`、`agent_b.md`（角色定位 / 职责边界 / 行为规范 / 输出要求，借鉴 agent-md 结构），未绑定身份卡时全文注入 system prompt（mtime 缓存，改文件即时生效）；绑定身份卡后以身份卡为准。
+- **内部技能库**：`backend/skills/*.md`（技能 = 写法规范 / 模板 / 工作流文档）；前端「技能」面板增删；`skills.list` / `skills.read` 工具进入身份卡白名单选项，内置 Agent 与外部 Agent（MCP 网关同名工具）均可按白名单使用；内置两个示例技能（群公告写作、会议纪要模板）。
+- **多群聊**：`room_members` 成员归属关系表（agents 表保留为全局注册表，删除成员同步清理）；「＋新建群聊」选择成员创建（外部成员也可拉入），每个群独立的消息流 / 文件工作区 / 任务 / 记忆；左栏会话列表动态渲染 + 点击切换；MCP 网关全工具支持 `room_id` 参数（默认 default，成员归属校验越权拒绝）；pytest 44 例全过 + 多房间真机 e2e（建群 → 成员隔离 → 新群 WS 聊天仅本群成员回复 → 技能 CRUD → 删群）。
 
 ## 第 5.5 步能力清单（已完成并验收）
 
@@ -83,6 +90,9 @@ backend/          FastAPI sidecar
   app/files/       文件工作区（workspace.py 存储与乐观锁 / tools.py 工具 schema / routes.py API）
   app/orchestrator/ CEO 编排器（ceo.py 拆解/派发/验收/熔断 / routes.py 任务 API）
   app/memory/      向量记忆（hub.py 公私隔离向量库 / embeddings.py 可换装 embedding）
+  app/skills/      内部技能库（store.py md 存储 / routes.py API + skills.* 工具）
+  agent_md/        内置 Agent 专属行为规范（agent_a.md / agent_b.md，注入 system prompt）
+  skills/          技能文档（*.md，前端「技能」面板与 skills.* 工具共用）
   tests/           pytest（网关 / 文件工作区 / 工具循环 / 编排 / 记忆）
 frontend/         单页前端（原生 HTML/CSS/JS，微信式三栏布局）
 src-tauri/        Tauri 2 壳（Rust 只管窗口与 sidecar 生命周期）
@@ -110,6 +120,11 @@ docs/             设计文档与交接文档
 | POST | `/api/tasks/{id}/confirm` | 确认开工 / 熔断后恢复（action=resume） |
 | POST | `/api/tasks/{id}/abort` | 作废任务 |
 | GET | `/api/memory?room_id=` | 记忆统计 + 最近记忆（只读） |
+| GET/POST | `/api/rooms` | 房间列表 / 新建群聊（选择成员） |
+| DELETE | `/api/rooms/{rid}` | 删除群聊（default 不可删） |
+| GET/POST | `/api/skills` | 技能库列表 / 保存技能 |
+| GET/DELETE | `/api/skills/{name}` | 读技能 / 删技能 |
+| POST | `/api/llm-test` | LLM 端点连通性校验 |
 | MCP | `/gateway/mcp` | 接入网关（streamable-http；join_room / poll_messages / send_message / declare_status / fs_list / fs_read / fs_write） |
 | WS | `/ws/{room_id}` | 房间总线（上行发送，下行事件流） |
 

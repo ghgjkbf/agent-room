@@ -63,11 +63,41 @@ FS_TOOLS = [
 
 FS_TOOL_NAMES = {t["function"]["name"] for t in FS_TOOLS}
 
+# ---- skills.* 工具（内部技能库：写法规范/模板/工作流 md，Agent 自查照做） ----
+
+SKILL_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "skills.list",
+            "description": "列出内部技能库的全部技能（写法规范/模板/工作流）。",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "skills.read",
+            "description": "读取某个技能的完整内容（先 skills.list 看有什么）。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "技能名，如 meeting-notes"},
+                },
+                "required": ["name"],
+            },
+        },
+    },
+]
+
+ALL_TOOLS = FS_TOOLS + SKILL_TOOLS
+ALL_TOOL_NAMES = {t["function"]["name"] for t in ALL_TOOLS}
+
 
 def filter_tools(tools_allow: list[str] | None) -> list[dict]:
     """按身份卡 tools_allow 过滤；白名单外的工具不进定义（严格模式）。"""
     allow = set(tools_allow or [])
-    return [t for t in FS_TOOLS if t["function"]["name"] in allow]
+    return [t for t in ALL_TOOLS if t["function"]["name"] in allow]
 
 
 async def _notify_deliver(bus_registry, room_id: str, author: str, path: str, version: int, size: int):
@@ -115,6 +145,23 @@ def exec_fs_tool_sync(room_id: str, author: str, name: str, args: dict) -> str:
             result["_deliver"] = {"path": result["path"], "version": result["version"],
                                   "size": len(str(args.get("content", "")))}
             return json.dumps(result, ensure_ascii=False)
+
+        if name == "skills.list":
+            from app.skills import store
+
+            return json.dumps({"ok": True, "skills": [s["name"] for s in store.list_skills()]},
+                              ensure_ascii=False)
+
+        if name == "skills.read":
+            from app.skills import store
+
+            try:
+                s = store.read_skill(str(args.get("name", "")))
+                return json.dumps({"ok": True, **s}, ensure_ascii=False)
+            except FileNotFoundError as e:
+                return json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
+            except ValueError as e:
+                return json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
 
         return json.dumps({"ok": False, "error": f"未知工具：{name}"}, ensure_ascii=False)
     except HTTPException as e:

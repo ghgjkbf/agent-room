@@ -28,13 +28,37 @@ CHUNK_SIZE = 24
 # 工具循环上限（防失控，与互聊轮数无关）
 MAX_TOOL_ROUNDS = 8
 
-# 内置双 Agent 的默认职责（不绑定身份卡时生效；第 5.5 步定位冻结）
+# 内置双 Agent 的默认职责（专属 md 缺失时的兜底；完整规范见 backend/agent_md/*.md）
 DEFAULT_ROLES = {
     "agent_a": ("Agent A·用户服务助手：服务人类用户——答疑解惑、辅助用户生成提示词、"
                 "提供指导意见、协助调度与安排任务、监督其他 Agent 的进展。"),
     "agent_b": ("Agent B·群聊管家：服务群聊本身——定期总结归档聊天记录、监督群聊"
                 "定时清理、维护群聊上下文连贯与秩序。"),
 }
+
+# Agent 专属规范 md（backend/agent_md/{agent_id}.md，mtime 缓存）
+_MD_CACHE: dict[str, tuple[float, str]] = {}
+
+
+def load_agent_md(agent_id: str) -> str:
+    import os
+
+    path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "..", "agent_md", f"{agent_id}.md")
+    path = os.path.normpath(path)
+    if not os.path.isfile(path):
+        return ""
+    try:
+        mtime = os.path.getmtime(path)
+        hit = _MD_CACHE.get(agent_id)
+        if hit and hit[0] == mtime:
+            return hit[1]
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        _MD_CACHE[agent_id] = (mtime, text)
+        return text
+    except Exception:
+        return ""
 
 
 class GenerationRegistry:
@@ -89,7 +113,8 @@ def build_system_prompt(agent_id: str, identity: dict | None) -> str:
             role += "；职责：" + "、".join(resp)
         sys_parts.append(role + "。只回答与身份相关的问题，越界时简短说明并引导提问者换人。")
     elif agent_id in DEFAULT_ROLES:
-        sys_parts.append(f"你是 {DEFAULT_ROLES[agent_id]}")
+        md = load_agent_md(agent_id)
+        sys_parts.append(md if md else f"你是 {DEFAULT_ROLES[agent_id]}")
     else:
         sys_parts.append(f"你是 {agent_id}，未绑定身份卡。")
     return "\n".join(sys_parts)

@@ -23,7 +23,9 @@ HOUSE_RULES = """【房间使用约定】
 3. 广播消息不要求内置 Agent 回应；想请某位内置成员发言，请显式 @ 其 agent_id。
 4. 收到 priority=0 的 system 消息（P0 interrupt）时，立即停止当前动作并回一条确认。
 5. 你的 agent_id 与身份卡已绑定，发言请遵守身份卡职责；离线前用 declare_status(status="offline") 告别。
-6. 文件读写用 fs.list / fs.read / fs.write：交付物一律 fs.write 落工作区（覆盖已有文件必须传你最近一次读到的 version 作 base_version，冲突时重读重写），写成功后可 send_message(type="deliver") 附一句说明。"""
+6. 文件读写用 fs.list / fs.read / fs.write：交付物一律 fs.write 落工作区（覆盖已有文件必须传你最近一次读到的 version 作 base_version，冲突时重读重写），写成功后可 send_message(type="deliver") 附一句说明。
+7. 多房间：你可能同时被拉入多个群聊，各工具均可传 room_id（默认 default）；join_room 返回值含你所在的全部房间。
+8. 技能库：skills.list / skills.read 可查内部技能（写法规范/模板/工作流），照着做即可。"""
 
 def _agent_tools_allow(agent_id: str) -> list[str]:
     """该外部成员绑定身份卡的工具白名单（未绑卡 = 空 = 无 fs 工具）。"""
@@ -58,6 +60,21 @@ def authenticate(agent_id: str, token: str) -> dict:
     if not h["api_token_hash"] or h["api_token_hash"] != hash_token(token):
         raise PermissionError("令牌无效或已吊销")
     return dict(row)
+
+
+def _member_rooms(agent_id: str) -> list[str]:
+    """该成员所在的全部房间（room_members 关系表）。"""
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT room_id FROM room_members WHERE agent_id=? ORDER BY room_id",
+            (agent_id,)).fetchall()
+    return [r["room_id"] for r in rows]
+
+
+def _require_member(agent_id: str, room_id: str):
+    """校验成员归属：不在该房间则拒绝（多房间权限边界）。"""
+    if room_id not in _member_rooms(agent_id):
+        raise PermissionError(f"你不在房间 {room_id} 中（所在房间：{_member_rooms(agent_id)}）")
 
 
 def _err(e: Exception) -> str:
@@ -97,8 +114,7 @@ def build_mcp_server(bus_registry) -> MCPServer:
         """报到进群：校验令牌、置在线，广播进群消息，返回房间信息+群规。"""
         try:
             agent = authenticate(agent_id, token)
-            if room_id != agent["room_id"]:
-                raise PermissionError(f"该令牌绑定的是房间 {agent['room_id']}")
+            _require_member(agent_id, room_id)
             with db() as conn:
                 conn.execute(
                     "UPDATE agents SET status='online' WHERE id=?", (agent_id,)
@@ -120,6 +136,7 @@ def build_mcp_server(bus_registry) -> MCPServer:
                 "agent_id": agent_id,
                 "name": agent["name"],
                 "room_id": room_id,
+                "rooms": _member_rooms(agent_id),
                 "tools_allow": _agent_tools_allow(agent_id),
                 "rules": HOUSE_RULES,
             }, ensure_ascii=False)
@@ -127,20 +144,22 @@ def build_mcp_server(bus_registry) -> MCPServer:
             return _err(e)
 
     @srv.tool()
-    def poll_messages(agent_id: str, token: str, cursor: int = 0, limit: int = 50) -> str:
+    def poll_messages(agent_id: str, token: str, cursor: int = 0, limit: int = 50,
+                      room_id: str = "default") -> str:
         """按游标拉增量消息：cursor 传上次返回的 next_cursor（初始 0）。"""
         try:
             agent = authenticate(agent_id, token)
+            _require_member(agent_id, room_id)
             limit = max(1, min(int(limit), 200))
             with db() as conn:
                 rows = conn.execute(
                     "SELECT * FROM messages WHERE room_id=? AND id>? AND invalidated=0"
                     " ORDER BY id LIMIT ?",
-                    (agent["room_id"], int(cursor), limit),
+                    (room_id, int(cursor), limit),
                 ).fetchall()
                 last = conn.execute(
                     "SELECT COALESCE(MAX(id),0) m FROM messages WHERE room_id=?",
-                    (agent["room_id"],),
+                    (room_id,),
                 ).fetchone()
             msgs = [_msg_dict(r) for r in rows]
             next_cursor = msgs[-1]["seq"] if msgs else int(cursor)
@@ -162,16 +181,17 @@ def build_mcp_server(bus_registry) -> MCPServer:
         mentions: list[str] | None = None,
         type: str = "chat",
         client_msg_id: str | None = None,
+        room_id: str = "default",
     ) -> str:
         """发言/交付：type=chat 交流 | deliver 交付成果；client_msg_id 用于重试去重。"""
         try:
             agent = authenticate(agent_id, token)
+            _require_member(agent_id, room_id)
             text = str(text or "").strip()
             if not text:
                 raise ValueError("消息内容不能为空")
             if type not in ("chat", "deliver"):
                 raise ValueError("type 仅支持 chat | deliver")
-            room_id = agent["room_id"]
             if client_msg_id:
                 with db() as conn:
                     dup = conn.execute(
@@ -225,21 +245,24 @@ def build_mcp_server(bus_registry) -> MCPServer:
         return agent
 
     @srv.tool()
-    async def fs_list(agent_id: str, token: str) -> str:
+    async def fs_list(agent_id: str, token: str, room_id: str = "default") -> str:
         """列出房间文件工作区的全部文件（路径 / 版本 / 作者）。"""
         try:
             agent = _fs_guard(agent_id, token, "fs.list")
-            result = await exec_fs_tool(agent["room_id"], agent_id, "fs.list", {})
+            _require_member(agent_id, room_id)
+            result = await exec_fs_tool(room_id, agent_id, "fs.list", {})
             return result
         except Exception as e:
             return _err(e)
 
     @srv.tool()
-    async def fs_read(agent_id: str, token: str, path: str) -> str:
+    async def fs_read(agent_id: str, token: str, path: str,
+                      room_id: str = "default") -> str:
         """读取工作区文件内容与版本号。path 为相对路径（如 docs/方案.md）。"""
         try:
             agent = _fs_guard(agent_id, token, "fs.read")
-            result = await exec_fs_tool(agent["room_id"], agent_id, "fs.read",
+            _require_member(agent_id, room_id)
+            result = await exec_fs_tool(room_id, agent_id, "fs.read",
                                         {"path": path})
             return result
         except Exception as e:
@@ -247,17 +270,43 @@ def build_mcp_server(bus_registry) -> MCPServer:
 
     @srv.tool()
     async def fs_write(agent_id: str, token: str, path: str, content: str,
-                       base_version: int | None = None) -> str:
+                       base_version: int | None = None,
+                       room_id: str = "default") -> str:
         """写文件到工作区（整体覆盖）。新建省略 base_version；覆盖已有文件必须传
         最近一次读到的 version 作 base_version，冲突时重读后重写。写成功自动发
         deliver 消息进群。"""
         try:
             agent = _fs_guard(agent_id, token, "fs.write")
+            _require_member(agent_id, room_id)
             result = await exec_fs_tool(
-                agent["room_id"], agent_id, "fs.write",
+                room_id, agent_id, "fs.write",
                 {"path": path, "content": content, "base_version": base_version},
                 bus_registry,
             )
+            return result
+        except Exception as e:
+            return _err(e)
+
+    # ---- 内部技能库（第 6 步）：skills.* 经 MCP 对外暴露，白名单同 fs ----
+
+    @srv.tool()
+    async def skills_list(agent_id: str, token: str) -> str:
+        """列出内部技能库的全部技能（写法规范/模板/工作流）。"""
+        try:
+            g = _fs_guard(agent_id, token, "skills.list")
+            _ = g
+            result = await exec_fs_tool("default", agent_id, "skills.list", {})
+            return result
+        except Exception as e:
+            return _err(e)
+
+    @srv.tool()
+    async def skills_read(agent_id: str, token: str, name: str) -> str:
+        """读取某个技能的完整内容（先 skills.list 看有什么）。"""
+        try:
+            g = _fs_guard(agent_id, token, "skills.read")
+            _ = g
+            result = await exec_fs_tool("default", agent_id, "skills.read", {"name": name})
             return result
         except Exception as e:
             return _err(e)
