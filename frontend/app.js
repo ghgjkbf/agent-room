@@ -133,7 +133,7 @@ function handleMessage(msg) {
   }
 
   $('typing').style.display = 'block';
-  $('typing').textContent = `${agentLabel(msg.sender.id)} 正在输入…`;
+  $('typing').textContent = `${agentLabel(msg.sender.id)} ${i18t('正在输入…')}`;
   handleAgentChunk(msg);
   handleMessage._t = setTimeout(() => { $('typing').style.display = 'none'; }, 500);
 }
@@ -190,6 +190,7 @@ function connect() {
   ws.onerror = () => ws.close();
 }
 function setChip(text, color) {
+  text = i18t(text);
   $('ws-chip').textContent = text;
   $('ws-chip').style.color = color;
   $('ws-chip').classList.toggle('live', color === '#10b981');
@@ -245,8 +246,8 @@ async function refreshMembers() {
     const external = a.kind === 'external';
     const online = a.status === 'online';
     const badge = external
-      ? `<span class="kind-badge external">${online ? '🟢' : '⚪'} 外部${online ? '在线' : '离线'}</span>`
-      : `<span class="kind-badge internal">内置</span>`;
+      ? `<span class="kind-badge external">${online ? '🟢' : '⚪'} ${i18t(online ? '外部在线' : '外部离线')}</span>`
+      : `<span class="kind-badge internal">${i18t('内置')}</span>`;
     const bindUi = external
       ? ''
       : `<select data-agent="${a.id}" title="换绑身份卡">
@@ -256,16 +257,16 @@ async function refreshMembers() {
     // 第 5.5 步：外部成员未绑定 → 复制令牌（拿去接入）；已绑定 → 绑定身份卡（换绑/解绑）
     const tokUi = external
       ? (a.identity_id
-          ? `<button class="copy-tok bind-card" data-agent="${a.id}" data-name="${a.name}">绑定身份卡</button>`
-          : `<button class="copy-tok" data-agent="${a.id}" data-name="${a.name}">复制令牌</button>`) +
-        `<button class="del-agent" data-agent="${a.id}" data-name="${a.name}" title="删除成员">✕</button>`
+          ? `<button class="copy-tok bind-card" data-agent="${a.id}" data-name="${a.name}">${i18t('绑定身份卡')}</button>`
+          : `<button class="copy-tok" data-agent="${a.id}" data-name="${a.name}">${i18t('复制令牌')}</button>`) +
+        `<button class="del-agent" data-agent="${a.id}" data-name="${a.name}" title="${i18t('删除成员')}">✕</button>`
       : '';
     return `
     <div class="member">
       <div class="avatar" style="--h:${hueFor(a.id)}">${(a.name)[0].toUpperCase()}</div>
       <div style="min-width:0;">
         <div>${a.name}${badge}</div>
-        <div class="lbl" style="background:var(--brand-soft);color:var(--brand-ink);font-size:10px;padding:0 6px;border-radius:999px;display:inline-block;">${a.identity_label || '未绑定身份卡'}</div>
+        <div class="lbl" style="background:var(--brand-soft);color:var(--brand-ink);font-size:10px;padding:0 6px;border-radius:999px;display:inline-block;">${a.identity_label || i18t('未绑定身份卡')}</div>
       </div>
       ${bindUi}${tokUi}
     </div>`;
@@ -291,10 +292,10 @@ async function refreshMembers() {
     btn.addEventListener('click', () => openBindCard(btn.dataset.agent, btn.dataset.name)));
   $('member-list').querySelectorAll('.del-agent').forEach(btn =>
     btn.addEventListener('click', async () => {
-      if (!confirm(`删除成员「${btn.dataset.name}」？其令牌即刻失效。`)) return;
+      if (!confirm(i18t('删除成员？') + btn.dataset.name)) return;
       const r = await fetch(`/api/agents/${btn.dataset.agent}`, { method: 'DELETE' });
       if (!r.ok) return alertSys((await r.json()).detail || '删除失败');
-      alertSys(`已删除成员「${btn.dataset.name}」。`);
+      alertSys(i18t('已删除成员：') + btn.dataset.name);
       refreshMembers();
     }));
   $('agent-count').textContent = agents.length;
@@ -304,8 +305,8 @@ async function refreshMembers() {
 let bindTarget = null;
 function openBindCard(agentId, agentName) {
   bindTarget = agentId;
-  $('bind-title').textContent = `绑定身份卡 · ${agentName}`;
-  $('bind-identity').innerHTML = '<option value="">— 解绑 —</option>' +
+  $('bind-title').textContent = i18t('绑定身份卡 · ') + agentName;
+  $('bind-identity').innerHTML = `<option value="">${i18t('— 解绑 —')}</option>` +
     identities.map(c => `<option value="${c.id}">${c.label}</option>`).join('');
   const cur = (agents.find(a => a.id === agentId) || {}).identity_id || '';
   $('bind-identity').value = cur;
@@ -327,7 +328,7 @@ $('btn-bind-save').addEventListener('click', async () => {
   if (!r.ok) return alertSys('绑定失败：' + JSON.stringify(await r.json()));
   $('modal-mask').classList.remove('on');
   $('modal-bind').style.display = 'none';
-  alertSys('身份卡已更新。');
+  alertSys(i18t('身份卡已更新。'));
   refreshMembers();
 });
 
@@ -551,22 +552,22 @@ async function refreshFiles() {
     return `<div class="file-row" data-path="${p}">
       <span class="file-name" title="${p}">📄 ${dir ? `<span class="file-dir">${dir}</span>` : ''}${name}</span>
       <span class="file-ver">v${f.version}</span>
-      <span class="file-author ${f.author === 'human' ? 'hum' : ''}">${f.author === 'human' ? '👤' : '🤖'}${f.author === 'human' ? '人类' : f.author}</span>
+      <span class="file-author ${f.author === 'human' ? 'hum' : ''}">${f.author === 'human' ? '👤' : '🤖'}${f.author === 'human' ? i18t('人类') : f.author}</span>
       <button class="file-del" data-path="${p}" title="删除">✕</button>
     </div>`;
-  }).join('') : '<div class="hint">（暂无文件；Agent 交付物与人类上传都会出现在这里）</div>';
+  }).join('') : `<div class="hint">${i18t('（暂无文件；Agent 交付物与人类上传都会出现在这里）')}</div>`;
 
   $('file-tree').querySelectorAll('.file-name').forEach(el =>
     el.addEventListener('click', () => previewFile(el.closest('.file-row').dataset.path)));
   $('file-tree').querySelectorAll('.file-del').forEach(el =>
     el.addEventListener('click', async () => {
       const p = el.dataset.path;
-      if (!confirm(`删除文件 ${p}？`)) return;
+      if (!confirm(i18t('删除文件？') + p)) return;
       await fetch('/api/files', {
         method: 'DELETE', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ room_id: currentRoom, path: p }),
       });
-      if (previewedFile && previewedFile.path === p) { previewedFile = null; $('file-preview').value = ''; $('file-preview-head').textContent = '点文件名预览'; }
+      if (previewedFile && previewedFile.path === p) { previewedFile = null; $('file-preview').value = ''; $('file-preview-head').textContent = i18t('点文件名预览'); }
       refreshFiles();
     }));
   $('file-count').textContent = files.length;
@@ -590,7 +591,7 @@ $('file-input').addEventListener('change', async () => {
   const r = await fetch(`/api/files/upload?room_id=${currentRoom}`, { method: 'POST', body: fd });
   if (!r.ok) return alertSys('上传失败：' + ((await r.json()).detail || r.status));
   const d = await r.json();
-  alertSys(`已上传 ${d.path}（v${d.version}）`);
+  alertSys(i18t('已上传：') + d.path + ' v' + d.version);
   $('file-input').value = '';
   refreshFiles();
 });
@@ -606,13 +607,13 @@ $('btn-save-preview').addEventListener('click', async () => {
   if (!r.ok) {
     const d = await r.json();
     if (d.detail && d.detail.latest_version !== undefined) {
-      alertSys(`版本冲突：当前已是 v${d.detail.latest_version}，已为你刷新内容，请重新保存。`);
+      alertSys(i18t('版本冲突：') + 'v' + d.detail.latest_version + i18t('，已为你刷新内容，请重新保存。'));
       previewFile(previewedFile.path); refreshFiles();
     } else alertSys('保存失败：' + (d.detail || JSON.stringify(d)));
     return;
   }
   const d = await r.json();
-  alertSys(`已保存 ${d.path}（v${d.version}）`);
+  alertSys(i18t('已保存：') + d.path + ' v' + d.version);
   previewedFile.version = d.version;
   $('file-preview-head').textContent = `${d.path} · v${d.version} · 作者 你`;
   refreshFiles();
@@ -625,6 +626,8 @@ function esc(s) {
 }
 const SUB_CHIP = { pending: '待派发', dispatched: '执行中', accepted: '已验收', rejected: '已打回' };
 const TASK_ST = { awaiting_confirm: '待确认', running: '执行中', paused: '已熔断·待裁决', done: '已完成', aborted: '已作废' };
+const subChip = k => i18t(SUB_CHIP[k]);
+const taskSt = k => i18t(TASK_ST[k]);
 
 async function fetchTasks() {
   const res = await fetch(`/api/tasks?room_id=${currentRoom}`);
@@ -634,26 +637,26 @@ async function fetchTasks() {
 function renderTasks(tasks) {
   const el = $('task-list');
   if (!tasks.length) {
-    el.innerHTML = '<div class="hint">（暂无任务；在上方填写目标并下达，CEO 将拆解为排产单）</div>';
+    el.innerHTML = `<div class="hint">${i18t('（暂无任务；在上方填写目标并下达，CEO 将拆解为排产单）')}</div>`;
     return;
   }
   el.innerHTML = tasks.map(t => {
     const subs = (t.subtasks || []).map(s => {
       const detail =
-        (s.delivery_text ? `<div class="sub-detail">交付：${esc(s.delivery_text.slice(0, 100))}${s.delivery_text.length > 100 ? '…' : ''}</div>` : '') +
-        (s.last_receipt ? `<div class="sub-detail">验收：${esc(s.last_receipt.slice(0, 100))}${s.last_receipt.length > 100 ? '…' : ''}</div>` : '');
-      return `<div class="subtask"><span class="st-chip st-${s.status}">${SUB_CHIP[s.status] || s.status_label}</span>` +
-        `<span>#${s.seq} ${esc(s.title)} → ${esc(s.assignee)}${s.retries ? `（打回${s.retries}次）` : ''}</span></div>${detail}`;
+        (s.delivery_text ? `<div class="sub-detail">${i18t('交付：')}${esc(s.delivery_text.slice(0, 100))}${s.delivery_text.length > 100 ? '…' : ''}</div>` : '') +
+        (s.last_receipt ? `<div class="sub-detail">${i18t('验收：')}${esc(s.last_receipt.slice(0, 100))}${s.last_receipt.length > 100 ? '…' : ''}</div>` : '');
+      return `<div class="subtask"><span class="st-chip st-${s.status}">${subChip(s.status) || s.status_label}</span>` +
+        `<span>#${s.seq} ${esc(s.title)} → ${esc(s.assignee)}${s.retries ? i18t('（打回') + s.retries + i18t('次）') : ''}</span></div>${detail}`;
     }).join('');
     let actions = '';
     if (t.status === 'awaiting_confirm')
-      actions = `<button class="btn primary sm" data-act="confirm" data-id="${t.id}">✓ 确认开工</button>` +
-                `<button class="btn danger-full sm" data-act="abort" data-id="${t.id}">作废</button>`;
+      actions = `<button class="btn primary sm" data-act="confirm" data-id="${t.id}">${i18t('✓ 确认开工')}</button>` +
+                `<button class="btn danger-full sm" data-act="abort" data-id="${t.id}">${i18t('作废')}</button>`;
     else if (t.status === 'paused')
-      actions = `<button class="btn primary sm" data-act="resume" data-id="${t.id}">继续执行</button>` +
-                `<button class="btn danger-full sm" data-act="abort" data-id="${t.id}">终止</button>`;
+      actions = `<button class="btn primary sm" data-act="resume" data-id="${t.id}">${i18t('继续执行')}</button>` +
+                `<button class="btn danger-full sm" data-act="abort" data-id="${t.id}">${i18t('终止')}</button>`;
     return `<div class="task-card"><div class="task-goal">🎯 ${esc(t.goal)}</div>` +
-      `<div class="task-status">状态：${TASK_ST[t.status] || t.status_label}</div>${subs}` +
+      `<div class="task-status">${i18t('状态：')}${taskSt(t.status) || t.status_label}</div>${subs}` +
       (actions ? `<div class="task-actions">${actions}</div>` : '') + '</div>';
   }).join('');
   el.querySelectorAll('button[data-act]').forEach(b => b.addEventListener('click', async () => {
@@ -664,7 +667,7 @@ function renderTasks(tasks) {
       body: JSON.stringify({ action: act }),
     })).json();
     if (!r.ok) return alertSys(r.detail || '操作失败');
-    alertSys(act === 'abort' ? '任务已作废。' : act === 'resume' ? '已恢复执行，CEO 按依赖继续派发。' : '已确认开工，CEO 按依赖派发排产单。');
+    alertSys(act === 'abort' ? i18t('任务已作废。') : act === 'resume' ? i18t('已恢复执行，CEO 按依赖继续派发。') : i18t('已确认开工，CEO 按依赖派发排产单。'));
     fetchTasks();
   }));
 }
@@ -680,11 +683,11 @@ $('btn-tools-clear').addEventListener('click', () => {
 
 $('btn-issue-task').addEventListener('click', () => {
   const v = $('task-goal').value.trim();
-  if (!v) return alertSys('请先填写任务目标');
+  if (!v) return alertSys(i18t('请先填写任务目标'));
   if (!ws || ws.readyState !== WebSocket.OPEN) return alertSys('连接未就绪');
   ws.send(JSON.stringify({ type: 'task', text: v }));
   $('task-goal').value = '';
-  alertSys('任务已下达，CEO 正在拆解…');
+  alertSys(i18t('任务已下达，CEO 正在拆解…'));
 });
 
 async function refreshMemory() {
@@ -692,12 +695,12 @@ async function refreshMemory() {
   if (!res.ok) return;
   const d = await res.json();
   const s = d.stats || {};
-  const agentPart = Object.entries(s.agents || {}).map(([a, n]) => `${a}:${n}`).join('，');
-  $('mem-stats').textContent = `公共记忆 ${s.public || 0} 条` + (agentPart ? `；私有记忆 ${agentPart}` : '');
+  const agentPart = Object.entries(s.agents || {}).map(([a, n]) => `${a}:${n}`).join(', ');
+  $('mem-stats').textContent = `${i18t('公共记忆')} ${s.public || 0} ${i18t('条')}` + (agentPart ? ` · ${i18t('私有记忆')} ${agentPart}` : '');
   const items = d.recent || [];
   $('mem-list').innerHTML = items.length
     ? items.map(r => `<div class="mem-item">${esc(r.text)}<div class="mem-meta">${esc(r.scope)} · ${esc((r.created_at || '').slice(0, 16).replace('T', ' '))}</div></div>`).join('')
-    : '<div class="hint">（暂无记忆；任务验收通过后自动沉淀）</div>';
+    : `<div class="hint">${i18t('（暂无记忆；任务验收通过后自动沉淀）')}</div>`;
 }
 
 /* ---------- 多房间（第 6 步）：会话列表 / 新建群聊 / 切换 ---------- */
@@ -733,7 +736,7 @@ async function switchRoom(rid) {
   renderRooms();
   await loadRoomView();
   connect();
-  alertSys(`已切换到「${(rooms.find(r => r.id === currentRoom) || {}).name || currentRoom}」。`);
+  alertSys(i18t('已切换到：') + ((rooms.find(r => r.id === currentRoom) || {}).name || currentRoom));
 }
 async function loadRoomView() {
   const data = await (await fetch('/api/room/' + currentRoom)).json();
@@ -781,12 +784,12 @@ async function refreshSkills() {
         <button class="mini-btn" data-export="${esc(s.name)}">导出</button> ·
         <button class="mini-btn" data-skill="${esc(s.name)}" style="color:#b42318;">删除</button></div>
     </div>`).join('')
-    : '<div class="hint">（暂无技能；在下方添加、导入 .md 文件，或参考内置示例）</div>';
+    : `<div class="hint">${i18t('（暂无技能；在下方添加、导入 .md 文件，或参考内置示例）')}</div>`;
   el.querySelectorAll('button[data-skill]').forEach(b => b.addEventListener('click', async () => {
-    if (!confirm(`删除技能「${b.dataset.skill}」？`)) return;
+    if (!confirm(i18t('删除技能？') + b.dataset.skill)) return;
     const r = await fetch(`/api/skills/${b.dataset.skill}`, { method: 'DELETE' });
     if (!r.ok) return alertSys('删除失败');
-    alertSys('技能已删除'); refreshSkills();
+    alertSys(i18t('技能已删除')); refreshSkills();
   }));
   el.querySelectorAll('button[data-export]').forEach(b => b.addEventListener('click', async () => {
     const d = await (await fetch(`/api/skills/${b.dataset.export}`)).json();
@@ -820,7 +823,7 @@ $('btn-save-skill').addEventListener('click', async () => {
   const err = await saveSkillRemote(name, content);
   if (err) return alertSys(err);
   $('skill-name').value = ''; $('skill-content').value = '';
-  alertSys(`技能「${name}」已保存，Agent 经 skills.* 工具即可使用。`);
+  alertSys(i18t('技能已保存：') + name);
   refreshSkills();
 });
 $('btn-import-skill').addEventListener('click', () => $('skill-files').click());
@@ -843,10 +846,10 @@ $('skill-files').addEventListener('change', async () => {
 
 /* ---------- 外观（背景/透明度/动效，localStorage 持久化） ---------- */
 const BG_PRESETS = [
-  { id: 'default', name: '默认', css: '' },
-  { id: 'mist', name: '薄雾', css: 'linear-gradient(160deg,#eef2ff 0%,#f6f6f8 55%,#fdf2f8 100%)' },
-  { id: 'dawn', name: '晨曦', css: 'linear-gradient(160deg,#fff7ed 0%,#f6f6f8 50%,#ecfeff 100%)' },
-  { id: 'ink', name: '暮色', css: 'linear-gradient(160deg,#e0e7ff 0%,#f6f6f8 45%,#e0f2fe 100%)' },
+  { id: 'default', name: '默认', en: 'Default', css: '' },
+  { id: 'mist', name: '薄雾', en: 'Mist', css: 'linear-gradient(160deg,#eef2ff 0%,#f6f6f8 55%,#fdf2f8 100%)' },
+  { id: 'dawn', name: '晨曦', en: 'Dawn', css: 'linear-gradient(160deg,#fff7ed 0%,#f6f6f8 50%,#ecfeff 100%)' },
+  { id: 'ink', name: '暮色', en: 'Dusk', css: 'linear-gradient(160deg,#e0e7ff 0%,#f6f6f8 45%,#e0f2fe 100%)' },
 ];
 let appearance = Object.assign(
   { preset: 'default', image: null, mask: 0, bubble: 100, ripple: true },
@@ -880,7 +883,7 @@ function renderBgPresets() {
     return `<div data-preset="${p.id}" title="${p.name}" style="cursor:pointer;height:44px;border-radius:8px;
       border:2px solid ${active ? 'var(--brand)' : 'var(--line)'};background:${p.css || 'var(--bg)'};
       display:flex;align-items:end;justify-content:center;font-size:9px;color:var(--muted);padding-bottom:2px;
-      ${p.id === 'default' ? 'background:#f6f6f8;' : ''}">${p.name}</div>`;
+      ${p.id === 'default' ? 'background:#f6f6f8;' : ''}">${I18N_LANG === 'en' && p.en ? p.en : p.name}</div>`;
   }).join('');
   el.querySelectorAll('[data-preset]').forEach(d => d.addEventListener('click', () => {
     appearance.preset = d.dataset.preset; appearance.image = null; saveAppearance(); applyAppearance();
@@ -896,15 +899,15 @@ $('bg-file').addEventListener('change', () => {
     try {
       appearance.image = rd.result; appearance.preset = 'custom';
       saveAppearance(); applyAppearance();
-      alertSys('背景图已应用（仅存本浏览器）。');
-    } catch (e) { alertSys('图片过大无法本地存储，请换小图。'); }
+      alertSys(i18t('背景图已应用（仅存本浏览器）。'));
+    } catch (e) { alertSys(i18t('图片过大无法本地存储，请换小图。')); }
   };
   rd.readAsDataURL(f);
   $('bg-file').value = '';
 });
 $('btn-bg-reset').addEventListener('click', () => {
   appearance = { preset: 'default', image: null, mask: 0, bubble: 100, ripple: appearance.ripple };
-  saveAppearance(); applyAppearance(); alertSys('外观已恢复默认。');
+  saveAppearance(); applyAppearance(); alertSys(i18t('外观已恢复默认。'));
 });
 $('bg-mask').addEventListener('input', () => {
   appearance.mask = +$('bg-mask').value; saveAppearance(); applyAppearance();
@@ -950,13 +953,20 @@ document.addEventListener('click', (e) => {
   m.classList.remove('pop'); void m.offsetWidth; m.classList.add('pop');
 });
 
+/* 语言切换：document 级委托（不依赖 boot 内联注册时序） */
+document.addEventListener('change', (e) => {
+  if (e.target && e.target.id === 'lang-select') applyLang(e.target.value);
+});
+
 /* ---------- 启动 ---------- */
 async function boot() {
+  applyLang(localStorage.getItem(I18N_LANG_KEY) || 'zh');
   await refreshRooms();
   await refreshIdentities();
   renderToolCheckboxes([]);   // 初始即渲染工具复选框（新建卡状态），一键白名单随时可用
   await refreshSkills();
   applyAppearance();
+  $('lang-select').value = I18N_LANG;
   await loadRoomView();
   connect();
 }

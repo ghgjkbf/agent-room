@@ -1,5 +1,7 @@
 # Agent Room · 多 Agent 群聊协作系统
 
+> **语言 / Language:** 简体中文 · [English](README.en.md)
+
 本机运行的多 Agent 群聊工作台：让电脑上的多个 Agent（内置 LLM Agent + 任意经 MCP 接入的外部 Agent）像拉群一样进同一房间协作。人类是群里的最高仲裁者——下目标、验收、随时 P0 打断。
 
 基于[多 Agent 协作系统设计文档](docs/agent-collab-design.html)实现。一切皆消息（append-only 事件流），编排者不执行、执行者不编排，本机优先（程序、数据、向量记忆不出本机）。
