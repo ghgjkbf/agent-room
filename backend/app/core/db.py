@@ -108,6 +108,10 @@ CREATE TABLE IF NOT EXISTS subtasks (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_subtasks_task ON subtasks(task_id, seq);
+CREATE TABLE IF NOT EXISTS kv (
+  k TEXT PRIMARY KEY,
+  v TEXT
+);
 """
 
 # 迁移后 messages 新增列：完整文本聚合列 + 分片序号/终止标记（协议扩展，旧库自动补）

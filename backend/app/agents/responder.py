@@ -2,12 +2,14 @@
 
 - 每个在线内置 Agent 独立任务并行回复，互不共享对话（防串味，s5）。
 - mentions 非空时仅被 @ 的 Agent 回复；广播时全体回复。
-- 身份卡 persona/responsibilities 注入 system prompt；单 Agent 互聊
-  轮数超 budget_turns 由总线发 system 熔断消息并 @人类。
+- 身份卡 persona/responsibilities 注入 system prompt；未绑定身份卡时使用
+  内置默认职责（第 5.5 步：Agent A 服务用户，Agent B 服务群聊管家）。
 - 生成句柄登记到 GenerationRegistry，P0 interrupt 可 cancel 当前流式生成。
 - 第 4 步：stream_text → run_turn 工具循环（OpenAI Function Calling）——
   stream 中 tool_calls → 执行 → 回灌 → 直至纯文本回复；工具按身份卡
   tools_allow 严格过滤；LLM 未配置时占位路径原样保留。
+- 第 5.5 步：互聊轮次熔断移除（不设上限，存储膨胀由 Agent B 定时归档清理，
+  见 app/rooms/janitor.py）。
 """
 
 import asyncio
@@ -23,8 +25,16 @@ from app.files.tools import exec_fs_tool, filter_tools
 
 # 单条分段推送的最大字符数，模拟流式节奏（真实 LLM 时逐 token 分段）
 CHUNK_SIZE = 24
-# 工具循环上限（防失控；身份卡 budget_turns 是互聊熔断，与此独立）
+# 工具循环上限（防失控，与互聊轮数无关）
 MAX_TOOL_ROUNDS = 8
+
+# 内置双 Agent 的默认职责（不绑定身份卡时生效；第 5.5 步定位冻结）
+DEFAULT_ROLES = {
+    "agent_a": ("Agent A·用户服务助手：服务人类用户——答疑解惑、辅助用户生成提示词、"
+                "提供指导意见、协助调度与安排任务、监督其他 Agent 的进展。"),
+    "agent_b": ("Agent B·群聊管家：服务群聊本身——定期总结归档聊天记录、监督群聊"
+                "定时清理、维护群聊上下文连贯与秩序。"),
+}
 
 
 class GenerationRegistry:
@@ -64,24 +74,8 @@ def load_identity(agent_id: str) -> dict | None:
 
 
 def bump_turns(agent_id: str) -> int:
-    """内置 Agent 轮数 +1 并返回剩余额度；外部成员不受熔断管辖（返回大数）。"""
-    with db() as conn:
-        row = conn.execute("SELECT kind FROM agents WHERE id=?", (agent_id,)).fetchone()
-        if row and (row["kind"] or "internal") == "external":
-            return 9999
-        conn.execute("UPDATE agents SET chat_turns = chat_turns + 1 WHERE id=?", (agent_id,))
-        row = conn.execute(
-            "SELECT a.chat_turns, COALESCE(i.budget_turns, 6) AS budget"
-            " FROM agents a LEFT JOIN identities i ON i.id = a.identity_id"
-            " WHERE a.id=?",
-            (agent_id,),
-        ).fetchone()
-    return int(row["budget"]) - int(row["chat_turns"])
-
-
-def reset_turns():
-    with db() as conn:
-        conn.execute("UPDATE agents SET chat_turns = 0")
+    """（已废弃）第 5.5 步起互聊轮次不设上限；保留空实现兼容旧调用。"""
+    return 9999
 
 
 def build_system_prompt(agent_id: str, identity: dict | None) -> str:
@@ -94,18 +88,22 @@ def build_system_prompt(agent_id: str, identity: dict | None) -> str:
         if resp:
             role += "；职责：" + "、".join(resp)
         sys_parts.append(role + "。只回答与身份相关的问题，越界时简短说明并引导提问者换人。")
+    elif agent_id in DEFAULT_ROLES:
+        sys_parts.append(f"你是 {DEFAULT_ROLES[agent_id]}")
     else:
         sys_parts.append(f"你是 {agent_id}，未绑定身份卡。")
     return "\n".join(sys_parts)
 
 
 def placeholder_text(agent_id: str, identity: dict | None, user_text: str) -> str:
-    name = identity["label"] if identity else agent_id
-    return (
-        f"[{name}·占位] 已收到：「{user_text}」。"
-        + (f"我按「{identity['label']}」的职责行事。" if identity else "我尚未绑定身份卡。")
-        + "（可在左侧「模型设置」接入真实 LLM）"
-    )
+    if identity:
+        name, duty = identity["label"], f"我按「{identity['label']}」的职责行事。"
+    elif agent_id in DEFAULT_ROLES:
+        name = "Agent A·用户服务助手" if agent_id == "agent_a" else "Agent B·群聊管家"
+        duty = DEFAULT_ROLES[agent_id].split("：", 1)[1]
+    else:
+        name, duty = agent_id, "我尚未绑定身份卡。"
+    return f"[{name}·占位] 已收到：「{user_text}」。{duty}（可在「模型」面板接入真实 LLM）"
 
 
 async def run_turn(agent_id: str, identity: dict | None, user_text: str,
@@ -289,16 +287,7 @@ async def respond_agent(bus, msg: Message, agent: dict):
         if tool_notes:
             final_dict["tool_summary"] = tool_notes
         await bus.broadcast_raw(json.dumps(final_dict, ensure_ascii=False))
-        remaining = bump_turns(aid)
-        if remaining <= 0 and identity:
-            label = identity["label"]
-            await bus.publish(Message(
-                room_id=bus.room_id, type="system", priority=2,
-                sender_kind="system", sender_id="bus",
-                payload_text=f"熔断：Agent {aid}（{label}）互聊轮数已达上限，已自动 @人类 裁决。",
-                mentions=["human"],
-            ))
-        # 第 5 步：编排器收尾钩子——执行者交付说明触发验收 / 互聊计入任务级熔断
+        # 第 5.5 步：互聊轮次熔断已移除（不设上限；存储膨胀由 janitor 定时归档）
         from app.orchestrator.ceo import notify_agent_final
 
         await notify_agent_final(bus, aid, final_text)

@@ -140,6 +140,9 @@
   .member .copy-tok{margin-left:auto;border:1px solid var(--line);background:#fff;border-radius:7px;
     font-size:10.5px;padding:3px 8px;cursor:pointer;color:var(--muted);}
   .member .copy-tok:hover{border-color:var(--brand);color:var(--brand-ink);}
+  .member .del-agent{border:1px solid var(--line);background:#fff;border-radius:7px;
+    font-size:10.5px;padding:3px 7px;cursor:pointer;color:#b42318;margin-left:4px;}
+  .member .del-agent:hover{border-color:#b42318;background:#fef2f2;}
 
   /* 文件工作区（面板内上下布局：树上预览下） */
   .files-wrap{display:flex;flex-direction:column;gap:10px;height:100%;}
@@ -305,7 +308,7 @@
       <button class="btn primary sm" id="btn-add-external2" style="margin-top:8px;">＋ 添加外部成员（TRAE / ZCode）</button>
       <div class="grp" style="margin-top:16px;">快捷操作</div>
       <button class="btn danger-full" id="btn-stop-all2">■ 停止全部（P0 interrupt）</button>
-      <div class="hint">P0 生效会取消所有 Agent 正在进行的生成，且重置互聊轮数。</div>
+      <div class="hint">P0 生效会取消所有 Agent 正在进行的生成。互聊不设上限，聊天记录由 Agent B 定时总结归档清理。</div>
     </div>
 
     <div class="rp-body" id="rp-identity">
@@ -321,13 +324,11 @@
       <input type="text" id="id-resp" placeholder="检索资料、写调研笔记">
       <div class="grp">工具白名单 tools_allow</div>
       <div id="id-tools" class="tool-grid"></div>
-      <label class="f">互聊轮数上限 budget_turns：<b id="id-turns-v">6</b></label>
-      <input type="range" id="id-turns" min="1" max="12" value="6">
       <div class="row" style="margin-top:10px;gap:8px;display:flex;">
         <button class="btn primary sm" id="btn-save-id" style="margin-top:0;flex:1;">保存</button>
         <button class="btn danger-full sm" id="btn-del-id" style="margin-top:0;flex:1;">删除</button>
       </div>
-      <div class="hint">保存后可在「成员」页为 Agent 换绑；编辑器按 s5 字段化冻结。</div>
+      <div class="hint">互聊轮次自 5.5 步起不设上限（Agent B 定时归档清理聊天记录防存储膨胀）。保存后可在「成员」页为 Agent 换绑。</div>
     </div>
 
     <div class="rp-body" id="rp-model">
@@ -376,6 +377,15 @@
       <div class="row" style="display:flex;gap:8px;margin-top:12px;">
         <button class="btn primary" id="btn-copy-all" style="margin-top:0;flex:1;">📋 复制全部配置</button>
         <button class="btn ghost" id="btn-ext-done" style="margin-top:0;flex:1;">完成</button>
+      </div>
+    </div>
+    <div id="modal-bind" style="display:none;">
+      <h3 id="bind-title">绑定身份卡</h3>
+      <label class="f">选择身份卡（选「解绑」恢复未绑定，按钮将变回复制令牌）</label>
+      <select id="bind-identity" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;"></select>
+      <div class="row" style="display:flex;gap:8px;margin-top:12px;">
+        <button class="btn primary" id="btn-bind-save" style="margin-top:0;flex:1;">保存</button>
+        <button class="btn ghost" id="btn-bind-cancel" style="margin-top:0;flex:1;">取消</button>
       </div>
     </div>
   </div>

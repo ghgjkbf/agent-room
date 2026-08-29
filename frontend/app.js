@@ -4,7 +4,7 @@
 const $ = (id) => document.getElementById(id);
 let ws = null;
 let agents = [];        // [{id,name,identity_id,identity_label,chat_turns}]
-let identities = [];    // [{id,label,persona,responsibilities,tools_allow,budget_turns,version}]
+let identities = [];    // [{id,label,persona,responsibilities,tools_allow,version}]
 const TOOL_OPTIONS = ['fs.read', 'fs.write', 'fs.list', 'shell.run', 'git.status', 'memory.query'];
 
 /* ---------- 消息渲染 ---------- */
@@ -189,15 +189,19 @@ async function refreshMembers() {
           <option value="">— 未绑定 —</option>
           ${identities.map(c => `<option value="${c.id}" ${c.id === a.identity_id ? 'selected' : ''}>${c.label}</option>`).join('')}
         </select>`;
+    // 第 5.5 步：外部成员未绑定 → 复制令牌（拿去接入）；已绑定 → 绑定身份卡（换绑/解绑）
     const tokUi = external
-      ? `<button class="copy-tok" data-agent="${a.id}" data-name="${a.name}">复制令牌</button>`
+      ? (a.identity_id
+          ? `<button class="copy-tok bind-card" data-agent="${a.id}" data-name="${a.name}">绑定身份卡</button>`
+          : `<button class="copy-tok" data-agent="${a.id}" data-name="${a.name}">复制令牌</button>`) +
+        `<button class="del-agent" data-agent="${a.id}" data-name="${a.name}" title="删除成员">✕</button>`
       : '';
     return `
     <div class="member">
       <div class="avatar">${(a.name)[0].toUpperCase()}</div>
       <div style="min-width:0;">
         <div>${a.name}${badge}</div>
-        <div class="lbl" style="background:var(--brand-soft);color:var(--brand-ink);font-size:10px;padding:0 6px;border-radius:999px;display:inline-block;">${a.identity_label ? a.identity_label + (external ? '' : ' · 轮数 ' + a.chat_turns) : '未绑定身份卡'}</div>
+        <div class="lbl" style="background:var(--brand-soft);color:var(--brand-ink);font-size:10px;padding:0 6px;border-radius:999px;display:inline-block;">${a.identity_label || '未绑定身份卡'}</div>
       </div>
       ${bindUi}${tokUi}
     </div>`;
@@ -210,7 +214,7 @@ async function refreshMembers() {
       });
       refreshMembers();
     }));
-  $('member-list').querySelectorAll('.copy-tok').forEach(btn =>
+  $('member-list').querySelectorAll('.copy-tok:not(.bind-card)').forEach(btn =>
     btn.addEventListener('click', async () => {
       const r = await fetch(`/api/agents/${btn.dataset.agent}/rotate-token`, { method: 'POST' });
       if (!r.ok) return alertSys((await r.json()).detail || '重发失败');
@@ -219,8 +223,49 @@ async function refreshMembers() {
       showExternalResult({ id: btn.dataset.agent, name: btn.dataset.name, token: d.token });
       refreshMembers();
     }));
+  $('member-list').querySelectorAll('.bind-card').forEach(btn =>
+    btn.addEventListener('click', () => openBindCard(btn.dataset.agent, btn.dataset.name)));
+  $('member-list').querySelectorAll('.del-agent').forEach(btn =>
+    btn.addEventListener('click', async () => {
+      if (!confirm(`删除成员「${btn.dataset.name}」？其令牌即刻失效。`)) return;
+      const r = await fetch(`/api/agents/${btn.dataset.agent}`, { method: 'DELETE' });
+      if (!r.ok) return alertSys((await r.json()).detail || '删除失败');
+      alertSys(`已删除成员「${btn.dataset.name}」。`);
+      refreshMembers();
+    }));
   $('agent-count').textContent = agents.length;
 }
+
+/* 第 5.5 步：外部成员绑定/换绑身份卡弹窗 */
+let bindTarget = null;
+function openBindCard(agentId, agentName) {
+  bindTarget = agentId;
+  $('bind-title').textContent = `绑定身份卡 · ${agentName}`;
+  $('bind-identity').innerHTML = '<option value="">— 解绑 —</option>' +
+    identities.map(c => `<option value="${c.id}">${c.label}</option>`).join('');
+  const cur = (agents.find(a => a.id === agentId) || {}).identity_id || '';
+  $('bind-identity').value = cur;
+  $('modal-form').style.display = 'none';
+  $('modal-result').style.display = 'none';
+  $('modal-bind').style.display = 'block';
+  $('modal-mask').classList.add('on');
+}
+$('btn-bind-cancel').addEventListener('click', () => {
+  $('modal-mask').classList.remove('on');
+  $('modal-bind').style.display = 'none';
+});
+$('btn-bind-save').addEventListener('click', async () => {
+  if (!bindTarget) return;
+  const r = await fetch(`/api/agents/${bindTarget}/bind`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identity_id: $('bind-identity').value || null }),
+  });
+  if (!r.ok) return alertSys('绑定失败：' + JSON.stringify(await r.json()));
+  $('modal-mask').classList.remove('on');
+  $('modal-bind').style.display = 'none';
+  alertSys('身份卡已更新。');
+  refreshMembers();
+});
 
 /* ---------- 身份卡编辑器 ---------- */
 let editingId = null; // null=新建
@@ -230,7 +275,7 @@ async function refreshIdentities() {
   $('id-list').innerHTML = identities.map(c => `
     <div class="idcard" data-id="${c.id}">
       🪪 <b>${c.label}</b> · ${c.responsibilities.join('、') || '无职责'}
-      <span class="cv">v${c.version} · ${c.budget_turns}轮</span>
+      <span class="cv">v${c.version}</span>
     </div>`).join('');
   $('id-list').querySelectorAll('.idcard').forEach(el =>
     el.addEventListener('click', () => {
@@ -250,8 +295,6 @@ function loadCard(c) {
   $('id-persona').value = c ? c.persona : '';
   $('id-resp').value = c ? c.responsibilities.join('、') : '';
   renderToolCheckboxes(c ? c.tools_allow : []);
-  $('id-turns').value = c ? c.budget_turns : 6;
-  $('id-turns-v').textContent = $('id-turns').value;
 }
 
 async function saveCard() {
@@ -260,7 +303,6 @@ async function saveCard() {
     persona: $('id-persona').value.trim(),
     responsibilities: $('id-resp').value.split(/[、,,]/).map(s => s.trim()).filter(Boolean),
     tools_allow: [...$('id-tools').querySelectorAll('input:checked')].map(i => i.value),
-    budget_turns: parseInt($('id-turns').value, 10),
   };
   if (!card.label) return alertSys('请填写显示标签 label');
   const url = editingId ? `/api/identities/${editingId}` : '/api/identities';
@@ -364,7 +406,6 @@ $('btn-save-llm').addEventListener('click', async () => {
 $('btn-new-id').addEventListener('click', () => { loadCard(null); });
 $('btn-save-id').addEventListener('click', saveCard);
 $('btn-del-id').addEventListener('click', deleteCard);
-$('id-turns').addEventListener('input', () => $('id-turns-v').textContent = $('id-turns').value);
 
 /* ---------- 外部成员（第 3 步 MCP 网关） ---------- */
 function showExternalResult(d) {

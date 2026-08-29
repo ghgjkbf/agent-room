@@ -7,6 +7,7 @@ import asyncio
 import json
 import os
 import uuid
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.staticfiles import StaticFiles
@@ -23,14 +24,26 @@ from app.mcp_gateway.server import mount_gateway
 from app.orchestrator import routes as task_routes
 from app.orchestrator.ceo import OrchestratorRegistry
 from app.rooms.bus import BusRegistry
+from app.rooms.janitor import janitor_loop
 
-app = FastAPI(title="agent-room", version="0.5.0")
+app = FastAPI(title="agent-room", version="0.5.5")
+
+
+@asynccontextmanager
+async def _lifespan(_app):
+    """Agent B 群聊管家定时归档循环（互聊不设上限后的存储防膨胀）。"""
+    _janitor = asyncio.create_task(janitor_loop("default"))
+    yield
+    _janitor.cancel()
+
+
+app.router.lifespan_context = _lifespan
 app.include_router(identity_routes.router)
 app.include_router(agent_routes.router)
 app.include_router(file_routes.router)
 app.include_router(task_routes.router)
 app.include_router(memory_routes.router)
-mount_gateway(app, BusRegistry)
+mount_gateway(app, BusRegistry)  # 包装上面的 lifespan，追加 MCP session_manager
 
 
 @app.get("/api/health")

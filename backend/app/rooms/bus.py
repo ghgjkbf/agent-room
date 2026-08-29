@@ -85,10 +85,9 @@ class RoomBus:
 
     async def handle_interrupt(self, text: str) -> Message:
         """P0 interrupt 语义（MVP = 停止档）：cancel 全部生成并广播回执。"""
-        from app.agents.responder import GenerationRegistry, reset_turns
+        from app.agents.responder import GenerationRegistry
 
         cancelled = GenerationRegistry.cancel_all()
-        reset_turns()
         ack = Message(
             room_id=self.room_id,
             type="system",

@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pytest
 
-from app.agents.responder import bump_turns, plan_replies
+from app.agents.responder import plan_replies
 from app.core.db import db, init_db
 from app.core.message import Message
 from app.mcp_gateway.server import authenticate, build_mcp_server
@@ -57,15 +57,16 @@ def test_plan_replies_anti_loop():
     assert [a["id"] for a in plan_replies(m, agents)] == ["agent_a"]
 
 
-def test_bump_turns_external_not_bounded():
-    aid, _ = _make_external()
-    try:
-        assert bump_turns(aid) == 9999  # 外部成员不受熔断
-        with db() as conn:
-            row = conn.execute("SELECT chat_turns FROM agents WHERE id=?", (aid,)).fetchone()
-        assert row["chat_turns"] == 0  # 且不计数
-    finally:
-        _cleanup(aid)
+def test_internal_default_roles():
+    """第 5.5 步：A/B 不绑身份卡时使用内置默认职责（A 服务用户 / B 服务群聊）。"""
+    from app.agents.responder import DEFAULT_ROLES, build_system_prompt, placeholder_text
+
+    assert "用户服务助手" in build_system_prompt("agent_a", None)
+    assert "群聊管家" in build_system_prompt("agent_b", None)
+    assert "未绑定身份卡" in build_system_prompt("agent_x", None)  # 其他内置无默认职责
+    assert "用户服务助手" in placeholder_text("agent_a", None, "你好")
+    assert "群聊管家" in placeholder_text("agent_b", None, "你好")
+    assert set(DEFAULT_ROLES) == {"agent_a", "agent_b"}
 
 
 def test_deduplicate_client_msg_id():

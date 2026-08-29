@@ -2,7 +2,16 @@
 
 基于 [agent-collab-system-design-doc.html](../../agent-collab-system-design-doc.html) v1.2 设计文档实现的桌面程序。定位：服务电脑上的 Agent——让本机多个 Agent（内置 LLM Agent + TRAE/ZCode 等外部 Agent）像拉群一样进同一房间交流协作。
 
-当前进度：**MVP 第 5 步完成**（CEO 编排闭环 + 向量记忆 + 任务级熔断）。**第 6 步交接文档：[docs/STEP6-HANDOFF.md](docs/STEP6-HANDOFF.md)**（新会话从这里继续）。
+当前进度：**MVP 第 5 步完成**（CEO 编排闭环 + 向量记忆 + 任务级熔断）；第 5.5 步迭代：互聊不设上限 + Agent B 定时归档清理 + 删除成员 + 外部成员绑定状态按钮切换。**第 6 步交接文档：[docs/STEP6-HANDOFF.md](docs/STEP6-HANDOFF.md)**（新会话从这里继续）。
+
+## 第 5.5 步能力清单（已完成并验收）
+
+- **互聊轮次不设上限**：移除 budget_turns 轮数熔断（身份卡编辑器不再有轮数滑杆）；任务级熔断保留（防死锁，超限暂停 @人类裁决，非硬上限）。
+- **Agent B 定时归档清理**（`app/rooms/janitor.py`，lifespan 拉起）：互聊不设上限后的存储防膨胀——每 `janitor_interval_s`（默认 1800s）检查一次，自上次游标以来的 chat 消息达 `janitor_min_msgs`（默认 60）即由 Agent B（群聊管家）总结成摘要写入公共记忆，然后物理删除这批 chat 消息（dispatch/receipt/task_plan/system 等关键消息保留），群里发归档回执；游标按房间存 kv 表。LLM 未配置时占位摘要。阈值可经环境变量 `AGENT_ROOM_JANITOR_INTERVAL_S` / `AGENT_ROOM_JANITOR_MIN_MSGS` 调整。
+- **内置双 Agent 职责分化**（不绑定身份卡时生效）：Agent A·用户服务助手（答疑、辅助提示词生成、指导意见、调度安排、监督进展）；Agent B·群聊管家（总结归档、监督清理、维护上下文）。
+- **删除成员**：成员面板外部成员新增 ✕ 删除（`DELETE /api/agents/{aid}`，令牌即刻失效；内置 A/B 不可删）。
+- **外部成员按钮随绑定状态切换**：未绑定 → 「复制令牌」（拿去接入）；已绑定 → 「绑定身份卡」（弹窗换绑/解绑）；成员列表兜底清理悬空身份卡引用。
+- **验收**：pytest 37 例全过（新增 janitor 归档/清理/游标房间隔离、内置默认职责、删除成员用例）；GUI 走查（Playwright + Edge）确认按钮切换、绑定弹窗、删除流程、滑杆移除。
 
 ## 第 5 步能力清单（已完成并验收）
 

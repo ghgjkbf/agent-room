@@ -45,6 +45,10 @@ def _ensure_internal(conn):
 async def list_agents():
     with db() as conn:
         _ensure_internal(conn)
+        # 兜底：身份卡被直接删库等历史操作造成的悬空引用 → 视为未绑定并清理
+        conn.execute(
+            "UPDATE agents SET identity_id=NULL WHERE identity_id IS NOT NULL AND"
+            " identity_id NOT IN (SELECT id FROM identities)")
         rows = conn.execute(
             "SELECT a.*, i.label AS identity_label FROM agents a"
             " LEFT JOIN identities i ON i.id = a.identity_id"
@@ -138,3 +142,18 @@ async def rotate_external_token(aid: str):
             raise HTTPException(400, "内置 Agent 无需令牌")
         token = _issue_token(conn, aid)
     return {"ok": True, "id": aid, "token": token}
+
+
+@router.delete("/{aid}")
+async def delete_agent(aid: str):
+    """删除成员（第 5.5 步）：仅外部成员可删；内置 A/B 是房间固定角色。"""
+    with db() as conn:
+        agent = conn.execute(
+            "SELECT id, kind, name FROM agents WHERE id=?", (aid,)
+        ).fetchone()
+        if not agent:
+            raise HTTPException(404, "agent not found")
+        if (agent["kind"] or "internal") != "external":
+            raise HTTPException(400, "内置 Agent 不可删除")
+        conn.execute("DELETE FROM agents WHERE id=?", (aid,))
+    return {"ok": True, "id": aid, "name": agent["name"]}

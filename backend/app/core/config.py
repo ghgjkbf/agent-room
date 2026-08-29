@@ -16,6 +16,9 @@ class Settings:
     subtask_max_retries: int = int(os.environ.get("AGENT_ROOM_SUBTASK_MAX_RETRIES", "2"))
     # 第 5 步向量记忆：注入上下文的 top-k
     memory_top_k: int = int(os.environ.get("AGENT_ROOM_MEMORY_TOP_K", "3"))
+    # 第 5.5 步：互聊轮次不设上限，改由 Agent B 定时归档清理聊天记录防存储膨胀
+    janitor_interval_s: int = int(os.environ.get("AGENT_ROOM_JANITOR_INTERVAL_S", "1800"))
+    janitor_min_msgs: int = int(os.environ.get("AGENT_ROOM_JANITOR_MIN_MSGS", "60"))
 
 
 settings = Settings()
