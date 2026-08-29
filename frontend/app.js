@@ -108,6 +108,23 @@ function handleMessage(msg) {
   clearTimeout(handleMessage._t);
 
   if (msg.type === 'system') { finalizeStreaming(); addBubble(msg); return; }
+
+  // 流式协议消息不是聊天内容，不能渲染成空气泡：
+  // 首片占位（空文本）→ 初始化该 Agent 的活跃气泡；终止信号（空文本）→ 收流
+  if (msg.type === 'chat' && msg.sender.kind === 'agent' && !msg.payload.text) {
+    if (msg.stream_seq === 0 && !msg.is_final) {
+      const bubble = addBubble(msg);
+      bubble.dataset.agent = msg.sender.id;
+      streaming[msg.sender.id] = { el: bubble, body: bubble.querySelector('.body') };
+      return;
+    }
+    if (msg.is_final) {
+      const st = streaming[msg.sender.id];
+      finalizeStreaming();
+      if (st && document.body.contains(st.el)) scheduleFoldCheck(st.el);
+      return;
+    }
+  }
   if (msg.type === 'deliver') { finalizeStreaming(); addDeliverBubble(msg); refreshFiles(); return; }
   if (!(msg.type === 'chat' && msg.sender.kind === 'agent' && msg.payload.text)) {
     finalizeStreaming();
