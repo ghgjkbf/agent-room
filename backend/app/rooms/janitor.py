@@ -92,13 +92,19 @@ async def run_janitor_once(room_id: str = "default", bus_registry=None) -> dict:
 
 
 async def janitor_loop(room_id: str = "default", bus_registry=None):
-    """lifespan 拉起的定时循环：每 janitor_interval_s 检查一次，异常不中断。"""
+    """lifespan 拉起的定时循环：每轮遍历全部房间各检查一次，异常不中断。"""
     from app.rooms.bus import BusRegistry
 
     registry = bus_registry or BusRegistry
     while True:
         try:
-            await run_janitor_once(room_id, registry)
+            with db() as conn:
+                rooms = [r["id"] for r in conn.execute("SELECT id FROM rooms").fetchall()]
         except Exception:
-            pass
+            rooms = [room_id]
+        for rid in rooms:
+            try:
+                await run_janitor_once(rid, registry)
+            except Exception:
+                pass
         await asyncio.sleep(settings.janitor_interval_s)

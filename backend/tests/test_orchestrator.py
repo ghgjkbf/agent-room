@@ -112,7 +112,7 @@ def test_reject_retry_then_pause_for_human(room, monkeypatch):
         await orch.dispatch_ready(bus, task["id"])
         sub = _sub_rows(task["id"])[0]
 
-        async def _reject(goal, s, text):
+        async def _reject(goal, s, text, checks=None):
             return {"accept": False, "reason": "不合格"}
 
         monkeypatch.setattr(orch, "_verdict", _reject)

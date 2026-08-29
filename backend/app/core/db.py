@@ -176,6 +176,10 @@ def init_db():
         conn.execute(
             "INSERT OR IGNORE INTO room_members (room_id, agent_id, joined_at)"
             " SELECT room_id, id, ? FROM agents", (now_cst(),))
+        # 优化迭代：子任务落最近一次验收结论（任务面板展示裁决依据）
+        scols = {r[1] for r in conn.execute("PRAGMA table_info(subtasks)")}
+        if scols and "last_receipt" not in scols:
+            conn.execute("ALTER TABLE subtasks ADD COLUMN last_receipt TEXT")
         _migrate_messages(conn)
 
 

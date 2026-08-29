@@ -582,9 +582,13 @@ function renderTasks(tasks) {
     return;
   }
   el.innerHTML = tasks.map(t => {
-    const subs = (t.subtasks || []).map(s =>
-      `<div class="subtask"><span class="st-chip st-${s.status}">${SUB_CHIP[s.status] || s.status_label}</span>` +
-      `<span>#${s.seq} ${esc(s.title)} → ${esc(s.assignee)}${s.retries ? `（打回${s.retries}次）` : ''}</span></div>`).join('');
+    const subs = (t.subtasks || []).map(s => {
+      const detail =
+        (s.delivery_text ? `<div class="sub-detail">交付：${esc(s.delivery_text.slice(0, 100))}${s.delivery_text.length > 100 ? '…' : ''}</div>` : '') +
+        (s.last_receipt ? `<div class="sub-detail">验收：${esc(s.last_receipt.slice(0, 100))}${s.last_receipt.length > 100 ? '…' : ''}</div>` : '');
+      return `<div class="subtask"><span class="st-chip st-${s.status}">${SUB_CHIP[s.status] || s.status_label}</span>` +
+        `<span>#${s.seq} ${esc(s.title)} → ${esc(s.assignee)}${s.retries ? `（打回${s.retries}次）` : ''}</span></div>${detail}`;
+    }).join('');
     let actions = '';
     if (t.status === 'awaiting_confirm')
       actions = `<button class="btn primary sm" data-act="confirm" data-id="${t.id}">✓ 确认开工</button>` +
@@ -608,6 +612,16 @@ function renderTasks(tasks) {
     fetchTasks();
   }));
 }
+/* 身份卡：一键白名单组合 */
+$('btn-tools-rec').addEventListener('click', () => {
+  $('id-tools').querySelectorAll('input').forEach(i => {
+    i.checked = ['fs.list', 'fs.read', 'fs.write', 'skills.list', 'skills.read'].includes(i.value);
+  });
+});
+$('btn-tools-clear').addEventListener('click', () => {
+  $('id-tools').querySelectorAll('input').forEach(i => { i.checked = false; });
+});
+
 $('btn-issue-task').addEventListener('click', () => {
   const v = $('task-goal').value.trim();
   if (!v) return alertSys('请先填写任务目标');
@@ -774,6 +788,7 @@ $('skill-files').addEventListener('change', async () => {
 async function boot() {
   await refreshRooms();
   await refreshIdentities();
+  renderToolCheckboxes([]);   // 初始即渲染工具复选框（新建卡状态），一键白名单随时可用
   await refreshSkills();
   await loadRoomView();
   connect();

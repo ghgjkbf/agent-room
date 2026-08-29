@@ -16,6 +16,7 @@
 
 import asyncio
 import json
+import re
 import uuid
 
 from app.core.config import settings
@@ -31,9 +32,38 @@ _TASK_ST = {"awaiting_confirm": "待确认", "running": "执行中",
             "paused": "已熔断·待人类裁决", "done": "已完成", "aborted": "已作废"}
 
 
+# 交付文本中「声称写过的文件路径」：至少带一层目录或常见扩展名，避免误伤版本号等
+_CLAIM_RE = re.compile(
+    r"[\w\-一-鿿]+(?:/[\w\-.一-鿿]+)*\.(?:md|markdown|txt|json|csv|log|yaml|yml|py|js|ts|html|css)\b",
+    re.IGNORECASE)
+
+
+def extract_claimed_paths(text: str) -> list[str]:
+    seen, out = set(), []
+    for m in _CLAIM_RE.finditer(text or ""):
+        p = m.group(0).rstrip(".,;、）)】\"'`，。")
+        if p not in seen:
+            seen.add(p)
+            out.append(p)
+    return out
+
+
 class Orchestrator:
     def __init__(self, room_id: str):
         self.room_id = room_id
+
+    def _verify_claims(self, delivery_text: str) -> list[str]:
+        """核对交付文本声称的文件是否真的在工作区（防「声称交付」骗过验收）。"""
+        from app.files import workspace
+
+        checks = []
+        for p in extract_claimed_paths(delivery_text):
+            try:
+                f = workspace.read_file(self.room_id, p)
+                checks.append(f"✓ {f['path']}（v{f['version']}，{len(f['content'])} 字符）")
+            except Exception:
+                checks.append(f"✗ {p} 未在工作区找到")
+        return checks
 
     # ---------- 消息入口 ----------
 
@@ -171,13 +201,18 @@ class Orchestrator:
         if sub["status"] != "dispatched":
             return  # 幂等：打回等待重做/已验收时忽略重复触发
         task = self._task(sub["task_id"])
-        verdict = await self._verdict(task["goal"], sub, delivery_text)
+        checks = self._verify_claims(delivery_text)
+        verdict = await self._verdict(task["goal"], sub, delivery_text, checks)
+        # 硬核验：真实 LLM 模式下，声称写了文件而工作区一个都没有 → 无视验收员直接打回
+        if settings.llm_ready() and checks and all(c.startswith("✗") for c in checks):
+            verdict = {"accept": False,
+                       "reason": "声称的交付文件经核验均不存在（" + "；".join(checks) + "）"}
         if verdict["accept"]:
             with db() as conn:
                 conn.execute(
                     "UPDATE subtasks SET status='accepted', delivery_text=?,"
-                    " accepted_at=? WHERE id=?",
-                    (delivery_text, now_cst(), sub["id"]))
+                    " last_receipt=?, accepted_at=? WHERE id=?",
+                    (delivery_text, verdict["reason"], now_cst(), sub["id"]))
             await bus.publish(Message(
                 room_id=self.room_id, type="receipt", sender_kind="orchestrator",
                 sender_id="ceo", parent_task_id=sub["task_id"],
@@ -205,8 +240,8 @@ class Orchestrator:
                 return
             with db() as conn:
                 conn.execute("UPDATE subtasks SET status='rejected', retries=?,"
-                             " delivery_text=? WHERE id=?",
-                             (retries, delivery_text, sub["id"]))
+                             " delivery_text=?, last_receipt=? WHERE id=?",
+                             (retries, delivery_text, verdict["reason"], sub["id"]))
             await bus.publish(Message(
                 room_id=self.room_id, type="receipt", sender_kind="orchestrator",
                 sender_id="ceo", parent_task_id=sub["task_id"],
@@ -275,12 +310,15 @@ class Orchestrator:
             return subs[:3]
         return _placeholder_plan(goal, task_id, executors)
 
-    async def _verdict(self, goal: str, sub: dict, delivery_text: str) -> dict:
+    async def _verdict(self, goal: str, sub: dict, delivery_text: str,
+                       checks: list[str] | None = None) -> dict:
+        user = (f"总目标：{goal}\n子任务：#{sub['seq']} {sub['title']}\n"
+                f"要求：{sub['guidance']}\n交付内容：{delivery_text[:800]}")
+        if checks:
+            user += "\n系统文件核验结果（声称写了文件时以此为准）：\n" + "\n".join(checks)
         data = await self._llm_json(
             "你是编排层验收员。判断交付是否满足子任务要求，只输出 JSON："
-            '{"accept":true/false,"reason":"一句话原因"}。', 
-            f"总目标：{goal}\n子任务：#{sub['seq']} {sub['title']}\n"
-            f"要求：{sub['guidance']}\n交付内容：{delivery_text[:800]}")
+            '{"accept":true/false,"reason":"一句话原因"}。', user)
         if data and isinstance(data.get("accept"), bool):
             return {"accept": data["accept"],
                     "reason": self._clean(data.get("reason", ""))}

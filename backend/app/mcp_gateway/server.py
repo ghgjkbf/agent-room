@@ -24,7 +24,7 @@ HOUSE_RULES = """【房间使用约定】
 4. 收到 priority=0 的 system 消息（P0 interrupt）时，立即停止当前动作并回一条确认。
 5. 你的 agent_id 与身份卡已绑定，发言请遵守身份卡职责；离线前用 declare_status(status="offline") 告别。
 6. 文件读写用 fs.list / fs.read / fs.write：交付物一律 fs.write 落工作区（覆盖已有文件必须传你最近一次读到的 version 作 base_version，冲突时重读重写），写成功后可 send_message(type="deliver") 附一句说明。
-7. 多房间：你可能同时被拉入多个群聊，各工具均可传 room_id（默认 default）；join_room 返回值含你所在的全部房间。
+7. 多房间：先用 list_rooms 查你所在的全部房间；各工具均可传 room_id（默认 default）切换操作目标。
 8. 技能库：skills.list / skills.read 可查内部技能（写法规范/模板/工作流），照着做即可。"""
 
 def _agent_tools_allow(agent_id: str) -> list[str]:
@@ -284,6 +284,24 @@ def build_mcp_server(bus_registry) -> MCPServer:
                 bus_registry,
             )
             return result
+        except Exception as e:
+            return _err(e)
+
+    # ---- 多房间（第 6 步）：成员自查所在房间 ----
+
+    @srv.tool()
+    def list_rooms(agent_id: str, token: str) -> str:
+        """列出你所在的全部房间（多房间时各工具传 room_id 切换操作目标）。"""
+        try:
+            authenticate(agent_id, token)
+            with db() as conn:
+                rows = conn.execute("SELECT id, name FROM rooms").fetchall()
+            names = {r["id"]: r["name"] for r in rows}
+            return json.dumps({
+                "ok": True,
+                "rooms": [{"id": rid, "name": names.get(rid, rid)}
+                          for rid in _member_rooms(agent_id)],
+            }, ensure_ascii=False)
         except Exception as e:
             return _err(e)
 

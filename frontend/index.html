@@ -192,6 +192,8 @@
   .st-chip.st-rejected{background:#fee2e2;color:#b91c1c;}
   .st-chip.st-pending{background:var(--bg);color:var(--muted);}
   .task-actions{margin-top:6px;display:flex;gap:6px;}
+  .sub-detail{font-size:11px;color:var(--muted);margin:2px 0 0 50px;line-height:1.5;
+    overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
   .mem-item{border-left:3px solid var(--brand-soft);padding:4px 8px;margin-bottom:6px;
     font-size:12px;background:var(--card);border-radius:0 8px 8px 0;}
   .mem-item .mem-meta{color:var(--muted);font-size:10.5px;margin-top:2px;}
@@ -327,6 +329,10 @@
       <label class="f">职责 responsibilities（顿号分隔）</label>
       <input type="text" id="id-resp" placeholder="检索资料、写调研笔记">
       <div class="grp">工具白名单 tools_allow</div>
+      <div style="display:flex;gap:6px;margin-bottom:5px;">
+        <button class="mini-btn" id="btn-tools-rec">⚡ 一键：文件+技能</button>
+        <button class="mini-btn" id="btn-tools-clear">清空</button>
+      </div>
       <div id="id-tools" class="tool-grid"></div>
       <div class="row" style="margin-top:10px;gap:8px;display:flex;">
         <button class="btn primary sm" id="btn-save-id" style="margin-top:0;flex:1;">保存</button>
