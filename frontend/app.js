@@ -403,7 +403,6 @@ $('btn-panel-members').dataset.panel = 'rp-members';
 $('btn-panel-settings').dataset.panel = 'rp-identity';
 $('btn-panel-help').dataset.panel = 'rp-help';
 
-$('btn-burger') && $('btn-burger').addEventListener('click', () => $('sidebar').classList.toggle('collapsed'));
 $('btn-send').addEventListener('click', sendText);
 $('draft').addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendText(); }

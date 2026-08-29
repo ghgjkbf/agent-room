@@ -50,6 +50,15 @@ app.include_router(skill_routes.router)
 mount_gateway(app, BusRegistry)  # 包装上面的 lifespan，追加 MCP session_manager
 
 
+@app.middleware("http")
+async def no_cache_frontend(request, call_next):
+    """前端入口不缓存：前端是频繁迭代的单文件页，避免浏览器跑旧 JS 配新 DOM。"""
+    resp = await call_next(request)
+    if request.url.path in ("/", "/index.html", "/app.js"):
+        resp.headers["Cache-Control"] = "no-cache, must-revalidate"
+    return resp
+
+
 @app.get("/api/health")
 async def health():
     return {"ok": True, "service": "agent-room"}
