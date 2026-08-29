@@ -2,7 +2,16 @@
 
 基于 [agent-collab-system-design-doc.html](../../agent-collab-system-design-doc.html) v1.2 设计文档实现的桌面程序。定位：服务电脑上的 Agent——让本机多个 Agent（内置 LLM Agent + TRAE/ZCode 等外部 Agent）像拉群一样进同一房间交流协作。
 
-当前进度：**MVP 第 5 步完成**（CEO 编排闭环 + 向量记忆 + 任务级熔断）；第 6 步增强：API 连通性校验、Agent 专属规范 md、内部技能库、多群聊（新建/切换）。**第 6 步交接文档：[docs/STEP6-HANDOFF.md](docs/STEP6-HANDOFF.md)**（新会话从这里继续）。
+当前进度：**MVP 第 5 步完成**（CEO 编排闭环 + 向量记忆 + 任务级熔断）；第 6 步增强：API 连通性校验、Agent 专属规范 md、内部技能库（含 .md 文件导入导出）、多群聊（新建/切换）；优化迭代：验收真实性核验、list_rooms、一键白名单、任务详情、全房间归档。**第 6 步交接文档：[docs/STEP6-HANDOFF.md](docs/STEP6-HANDOFF.md)**（新会话从这里继续）。
+
+## 优化迭代能力清单（验收真实性 + 体验补全）
+
+- **验收真实性核验**：交付文本中声称的文件路径自动提取并核对工作区（`extract_claimed_paths` + `_verify_claims`），核验结果注入验收员提示词；真实 LLM 模式下「声称的交付文件全部不存在」时无视验收员直接打回（堵住幻觉交付骗过验收的漏洞；占位模式不启用防自锁）。
+- **验收结论落库**：subtasks 新增 `last_receipt`（最近一次验收/打回原因），任务面板每个子任务显示交付摘要与验收结论。
+- **网关 `list_rooms` 工具**：外部 Agent 自查所在房间（仅返回自己被拉入的）。
+- **身份卡一键白名单**：「⚡ 一键：文件+技能」快捷勾选 fs.* + skills.*（工具复选框初始即渲染）。
+- **janitor 按房间遍历**：归档清理覆盖全部群聊。
+- **验收**：pytest 47 例全过（+路径提取 / 工作区核验含被骗验收员场景 / list_rooms 隔离）；真机 e2e（SDK 调 list_rooms 只见所在房间 + 占位闭环 last_receipt 落库）；GUI 走查通过。
 
 ## 第 6 步增强能力清单（已完成并验收）
 
