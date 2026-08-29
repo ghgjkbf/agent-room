@@ -9,10 +9,19 @@
     --ink:#1b1b1f; --muted:#5c5c66; --line:#e6e6ec; --bg:#f6f6f8;
     --card:#ffffff; --brand:#4b3fe3; --brand-soft:#f2f0ff; --brand-ink:#2a2380;
     --accent:#0f766e; --warn:#b45309; --danger:#b42318; --wx-green:#07c160;
+    /* 色彩纪律：靘紫=品牌/系统侧；微信绿只出现在人类气泡；琥珀/绿/红=状态语义 */
+    --mono:ui-monospace,"Cascadia Mono",Consolas,"Courier New",monospace;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   body{font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
-    color:var(--ink);background:var(--bg);height:100vh;overflow:hidden;}
+    color:var(--ink);background:var(--bg);height:100vh;overflow:hidden;
+    font-feature-settings:"tnum";}
+  /* 键盘焦点可见 + 细滚动条（质量底线） */
+  button:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--brand);outline-offset:2px;}
+  ::-webkit-scrollbar{width:6px;height:6px;}
+  ::-webkit-scrollbar-thumb{background:#d9d9e0;border-radius:3px;}
+  ::-webkit-scrollbar-thumb:hover{background:#c4c4cc;}
+  @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;}}
   #app{display:flex;height:100vh;}
 
   /* ===== 左侧：会话列表（微信式） ===== */
@@ -36,7 +45,7 @@
   .convo-name .cnt{font-size:10.5px;font-weight:400;color:var(--muted);}
   .convo-last{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;
     white-space:nowrap;margin-top:3px;}
-  .convo-time{font-size:10.5px;color:#c4c4cc;flex:none;}
+  .convo-time{font-family:var(--mono);font-size:10px;color:#c4c4cc;flex:none;}
   .cl-footer{padding:10px 12px;border-top:1px solid var(--line);display:flex;gap:8px;}
   .cl-footer .btn{flex:1;}
 
@@ -45,9 +54,12 @@
   .topbar{height:52px;background:var(--card);border-bottom:1px solid var(--line);
     display:flex;align-items:center;gap:12px;padding:0 16px;flex:none;}
   .room-name{font-size:15px;font-weight:600;}
-  .chip{font-size:11.5px;padding:3px 11px;border-radius:999px;background:var(--bg);color:var(--muted);
+  .chip{font-family:var(--mono);font-size:11px;padding:3px 11px;border-radius:999px;background:var(--bg);color:var(--muted);
     border:1px solid var(--line);}
   .chip.warn{color:var(--warn);background:#fef6ec;border-color:#fde4c3;}
+  .chip.live{color:#047857;border-color:#a7f3d0;background:#ecfdf5;}
+  .chip.live::first-letter{animation:breath 2.4s ease-in-out infinite;}
+  @keyframes breath{0%,100%{opacity:1}50%{opacity:.35}}
   .spacer{flex:1;}
   .icon-btn{border:none;background:none;font-size:15px;cursor:pointer;padding:5px 9px;border-radius:8px;
     color:#5c5c66;font-family:inherit;line-height:1;}
@@ -57,7 +69,11 @@
 
   .feed{flex:1;overflow-y:auto;padding:20px 26px;display:flex;flex-direction:column;gap:14px;}
   .msg{max-width:66%;padding:9px 13px;border-radius:13px;font-size:13.5px;line-height:1.65;
-    position:relative;box-shadow:0 1px 2px rgba(0,0,0,.05);word-break:break-word;}
+    position:relative;box-shadow:0 1px 2px rgba(0,0,0,.05);word-break:break-word;
+    animation:msg-in .15s ease-out;}
+  @keyframes msg-in{from{opacity:0;transform:translateY(6px);}}
+  .msg .who-dot{width:7px;height:7px;border-radius:50%;flex:none;
+    background:hsl(var(--h,240) 70% 45%);box-shadow:0 0 0 2px hsl(var(--h,240) 70% 45% /.18);}
   .msg .body{white-space:pre-wrap;}
   .msg.human{align-self:flex-end;background:#95ec69;color:var(--ink);border-bottom-right-radius:4px;}
   .msg.agent{align-self:flex-start;background:var(--card);border:1px solid #ececf1;border-bottom-left-radius:4px;}
@@ -68,6 +84,8 @@
   .lbl{font-size:9.5px;padding:0 6px;border-radius:999px;background:rgba(0,0,0,.12);}
   .msg.agent .lbl{background:var(--brand-soft);color:var(--brand-ink);}
   .typing{font-size:11px;color:var(--muted);align-self:flex-start;padding:2px 6px;display:none;}
+  .typing.on{display:block;}
+  .typing::after{content:"⋯";letter-spacing:2px;animation:breath 1.2s ease-in-out infinite;}
 
   /* 输入区（微信式：无边框输入 + 绿色发送） */
   .composer{border-top:1px solid var(--line);background:var(--card);padding:8px 16px 12px;
@@ -79,7 +97,8 @@
   .composer .tip{font-size:11px;color:var(--muted);}
   .send{background:var(--wx-green);color:#fff;border:none;border-radius:8px;padding:8px 26px;
     font-size:13.5px;cursor:pointer;font-family:inherit;font-weight:600;}
-  .send:hover{filter:brightness(1.06);}
+  .send:hover{filter:brightness(1.06);transform:translateY(-1px);box-shadow:0 3px 10px rgba(7,193,96,.35);}
+  .send:active{transform:translateY(0);box-shadow:none;}
 
   /* @提及弹出层 */
   .mention-pop{position:absolute;bottom:100%;left:16px;right:16px;background:#fff;
@@ -104,6 +123,7 @@
   .member{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:9px;font-size:13.5px;}
   .member:hover{background:var(--bg);}
   .avatar{width:28px;height:28px;border-radius:50%;background:var(--brand-soft);color:var(--brand-ink);
+    box-shadow:0 0 0 2px hsl(var(--h,240) 70% 45% /.8);
     display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;}
   .badge{font-size:10.5px;padding:1px 8px;border-radius:999px;background:var(--brand-soft);
     color:var(--brand-ink);margin-left:auto;}
@@ -129,7 +149,7 @@
     cursor:pointer;font-size:12.5px;background:#fafafc;display:flex;align-items:center;gap:8px;}
   .idcard:hover{border-color:var(--brand);}
   .idcard.sel{border-color:var(--brand);background:var(--brand-soft);}
-  .idcard .cv{margin-left:auto;color:var(--muted);font-size:11px;}
+  .idcard .cv{font-family:var(--mono);margin-left:auto;color:var(--muted);font-size:11px;}
   input[type=range]{width:100%;accent-color:var(--brand);}
   .member select{margin-left:auto;border:1px solid var(--line);border-radius:7px;
     font-size:11.5px;padding:3px 5px;background:#fff;max-width:110px;}
@@ -161,7 +181,7 @@
   .file-name{cursor:pointer;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .file-name:hover{color:var(--brand-ink);text-decoration:underline;}
   .file-dir{color:var(--muted);font-size:11px;}
-  .file-ver{flex:none;font-size:10.5px;background:var(--brand-soft);color:var(--brand-ink);
+  .file-ver{font-family:var(--mono);flex:none;font-size:10.5px;background:var(--brand-soft);color:var(--brand-ink);
     padding:0 7px;border-radius:999px;}
   .file-author{flex:none;font-size:10.5px;color:var(--muted);max-width:90px;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap;}
@@ -177,7 +197,7 @@
     background:#fff;border:1px solid #a7f3d0;border-radius:8px;font-size:12px;cursor:pointer;
     color:#047857;}
   .deliver-file:hover{background:#ecfdf5;text-decoration:underline;}
-  .tool-note{margin-top:4px;font-size:10.5px;color:var(--muted);background:var(--bg);
+  .tool-note{font-family:var(--mono);margin-top:4px;font-size:10.5px;color:var(--muted);background:var(--bg);
     border-radius:6px;padding:1px 8px;display:inline-block;}
   /* 第 5 步：任务面板 + 记忆面板 */
   .task-card{border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:8px;
@@ -185,7 +205,7 @@
   .task-goal{font-weight:600;margin-bottom:4px;}
   .task-status{color:var(--muted);font-size:11.5px;margin-bottom:6px;}
   .subtask{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;}
-  .st-chip{display:inline-block;min-width:44px;text-align:center;border-radius:999px;
+  .st-chip{font-family:var(--mono);display:inline-block;min-width:44px;text-align:center;border-radius:999px;
     font-size:10.5px;padding:1px 8px;background:var(--bg);color:var(--muted);}
   .st-chip.st-dispatched{background:#fef9c3;color:#a16207;}
   .st-chip.st-accepted{background:#dcfce7;color:#15803d;}

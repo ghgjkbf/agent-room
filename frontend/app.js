@@ -11,6 +11,13 @@ let agents = [];        // [{id,name,identity_id,identity_label,chat_turns}]
 let identities = [];    // [{id,label,persona,responsibilities,tools_allow,version}]
 const TOOL_OPTIONS = ['fs.read', 'fs.write', 'fs.list', 'skills.list', 'skills.read', 'shell.run', 'git.status', 'memory.query'];
 
+/* 签名元素：成员专属色相（id 稳定哈希 → hsl 色环），一眼分辨谁在说话 */
+function hueFor(id) {
+  let h = 0;
+  for (const c of String(id)) h = (h * 31 + c.charCodeAt(0)) % 360;
+  return h;
+}
+
 /* ---------- 消息渲染 ---------- */
 function addBubble(msg) {
   const feed = $('feed');
@@ -29,7 +36,13 @@ function addBubble(msg) {
       const meta = agents.find(a => a.id === msg.sender.id);
       name = meta ? meta.name : name;
     }
-    who.textContent = name;
+    if (kind === 'agent' || kind === 'orchestrator') {
+      const dot = document.createElement('i');
+      dot.className = 'who-dot';
+      dot.style.setProperty('--h', hueFor(msg.sender.id));
+      who.appendChild(dot);
+    }
+    who.appendChild(document.createTextNode(name));
     const lbl = document.createElement('span');
     lbl.className = 'lbl';
     lbl.textContent = kind === 'agent'
@@ -136,7 +149,11 @@ function connect() {
   ws.onclose = () => { setChip('● 已断开，3 秒重连', '#b42318'); setTimeout(connect, 3000); };
   ws.onerror = () => ws.close();
 }
-function setChip(text, color) { $('ws-chip').textContent = text; $('ws-chip').style.color = color; }
+function setChip(text, color) {
+  $('ws-chip').textContent = text;
+  $('ws-chip').style.color = color;
+  $('ws-chip').classList.toggle('live', color === '#10b981');
+}
 
 /* 左栏会话项的「最后一条」摘要（多房间：存 roomLast 再重渲染） */
 function updateConvoLast(msg) {
@@ -205,7 +222,7 @@ async function refreshMembers() {
       : '';
     return `
     <div class="member">
-      <div class="avatar">${(a.name)[0].toUpperCase()}</div>
+      <div class="avatar" style="--h:${hueFor(a.id)}">${(a.name)[0].toUpperCase()}</div>
       <div style="min-width:0;">
         <div>${a.name}${badge}</div>
         <div class="lbl" style="background:var(--brand-soft);color:var(--brand-ink);font-size:10px;padding:0 6px;border-radius:999px;display:inline-block;">${a.identity_label || '未绑定身份卡'}</div>
