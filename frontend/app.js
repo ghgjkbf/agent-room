@@ -707,28 +707,66 @@ async function refreshSkills() {
   const el = $('skill-list');
   el.innerHTML = list.length ? list.map(s =>
     `<div class="mem-item"><b>${esc(s.name)}</b>.md
-      <div class="mem-meta">${s.chars} 字符 · <button class="mini-btn" data-skill="${esc(s.name)}" style="color:#b42318;">删除</button></div>
+      <div class="mem-meta">${s.chars} 字符 ·
+        <button class="mini-btn" data-export="${esc(s.name)}">导出</button> ·
+        <button class="mini-btn" data-skill="${esc(s.name)}" style="color:#b42318;">删除</button></div>
     </div>`).join('')
-    : '<div class="hint">（暂无技能；在下方添加，或参考内置示例）</div>';
+    : '<div class="hint">（暂无技能；在下方添加、导入 .md 文件，或参考内置示例）</div>';
   el.querySelectorAll('button[data-skill]').forEach(b => b.addEventListener('click', async () => {
     if (!confirm(`删除技能「${b.dataset.skill}」？`)) return;
     const r = await fetch(`/api/skills/${b.dataset.skill}`, { method: 'DELETE' });
     if (!r.ok) return alertSys('删除失败');
     alertSys('技能已删除'); refreshSkills();
   }));
+  el.querySelectorAll('button[data-export]').forEach(b => b.addEventListener('click', async () => {
+    const d = await (await fetch(`/api/skills/${b.dataset.export}`)).json();
+    if (!d.content) return alertSys('读取失败');
+    const blob = new Blob([d.content], { type: 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${b.dataset.export}.md`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }));
+}
+/* 文件名 → 合法技能名（非法字符转连字符，防重尾） */
+function skillNameFromFile(filename) {
+  const base = filename.replace(/\.(md|markdown|txt)$/i, '');
+  return base.replace(/[\/:*?"<>|]+/g, '-').replace(/\s+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40)
+    || 'imported-skill';
+}
+async function saveSkillRemote(name, content) {
+  const r = await (await fetch('/api/skills', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name, content }),
+  })).json();
+  return r.ok || !!r.name ? null : (r.detail || '保存失败');
 }
 $('btn-save-skill').addEventListener('click', async () => {
   const name = $('skill-name').value.trim();
   const content = $('skill-content').value;
   if (!name) return alertSys('请填写技能名');
   if (!content.trim()) return alertSys('请填写技能内容');
-  const r = await (await fetch('/api/skills', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, content }),
-  })).json();
-  if (!r.ok && !r.name) return alertSys(r.detail || '保存失败');
+  const err = await saveSkillRemote(name, content);
+  if (err) return alertSys(err);
   $('skill-name').value = ''; $('skill-content').value = '';
   alertSys(`技能「${name}」已保存，Agent 经 skills.* 工具即可使用。`);
+  refreshSkills();
+});
+$('btn-import-skill').addEventListener('click', () => $('skill-files').click());
+$('skill-files').addEventListener('change', async () => {
+  const files = [...$('skill-files').files];
+  $('skill-files').value = '';
+  if (!files.length) return;
+  const ok = [], fail = [];
+  for (const f of files) {
+    if (f.size > 200_000) { fail.push(`${f.name}（超 20 万字符）`); continue; }
+    const content = await f.text();
+    const err = await saveSkillRemote(skillNameFromFile(f.name), content);
+    (err ? fail : ok).push(err ? `${f.name}（${err}）` : skillNameFromFile(f.name));
+  }
+  alertSys(`导入完成：成功 ${ok.length} 个${ok.length ? '（' + ok.join('、') + '）' : ''}` +
+    (fail.length ? `；失败 ${fail.length} 个${fail.length ? '：' + fail.join('、') : ''}` : ''));
   refreshSkills();
 });
 

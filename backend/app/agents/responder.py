@@ -97,11 +97,6 @@ def load_identity(agent_id: str) -> dict | None:
     }
 
 
-def bump_turns(agent_id: str) -> int:
-    """（已废弃）第 5.5 步起互聊轮次不设上限；保留空实现兼容旧调用。"""
-    return 9999
-
-
 def build_system_prompt(agent_id: str, identity: dict | None) -> str:
     sys_parts = ["你是群聊房间里的 AI 助手，简洁回答，遵守身份卡职责。"]
     if identity:
@@ -141,7 +136,7 @@ async def run_turn(agent_id: str, identity: dict | None, user_text: str,
       ("text", piece)                 —— 文本片段
     LLM 未配置时降级为本地占位（逐片 yield），与第 2 步行为一致。
     """
-    if not (settings.llm_base_url and settings.llm_api_key and settings.llm_model):
+    if not settings.llm_ready():
         for piece in _split(placeholder_text(agent_id, identity, user_text)):
             await asyncio.sleep(0.35)
             yield "text", piece
@@ -246,7 +241,7 @@ async def respond_agent(bus, msg: Message, agent: dict):
     try:
         identity = load_identity(aid)
         reply_id = str(uuid.uuid4())
-        got_llm = bool(settings.llm_base_url and settings.llm_api_key and settings.llm_model)
+        got_llm = settings.llm_ready()
         pieces = []
         tool_notes = []
         async for kind, item in run_turn(aid, identity, msg.payload_text,

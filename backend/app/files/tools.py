@@ -61,8 +61,6 @@ FS_TOOLS = [
     },
 ]
 
-FS_TOOL_NAMES = {t["function"]["name"] for t in FS_TOOLS}
-
 # ---- skills.* 工具（内部技能库：写法规范/模板/工作流 md，Agent 自查照做） ----
 
 SKILL_TOOLS = [
@@ -91,7 +89,6 @@ SKILL_TOOLS = [
 ]
 
 ALL_TOOLS = FS_TOOLS + SKILL_TOOLS
-ALL_TOOL_NAMES = {t["function"]["name"] for t in ALL_TOOLS}
 
 
 def filter_tools(tools_allow: list[str] | None) -> list[dict]:

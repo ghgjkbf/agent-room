@@ -22,5 +22,9 @@ class Settings:
     janitor_interval_s: int = int(os.environ.get("AGENT_ROOM_JANITOR_INTERVAL_S", "1800"))
     janitor_min_msgs: int = int(os.environ.get("AGENT_ROOM_JANITOR_MIN_MSGS", "60"))
 
+    def llm_ready(self) -> bool:
+        """LLM 三要素齐备（全项目统一判断入口，消散落的布尔表达式）。"""
+        return bool(self.llm_base_url and self.llm_api_key and self.llm_model)
+
 
 settings = Settings()

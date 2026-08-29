@@ -360,11 +360,16 @@
       <div class="hint" style="margin-bottom:8px;">技能 = 写法规范 / 模板 / 工作流（md 文档）。Agent 绑定含 skills.* 白名单的身份卡后，可在对话中自查技能并照做。</div>
       <div id="skill-list"></div>
       <div class="grp" style="margin-top:12px;">添加 / 更新技能</div>
-      <label class="f">技能名（字母/数字/连字符，如 meeting-notes）</label>
+      <label class="f">技能名（文字/数字/连字符，可中文，如 周报模板）</label>
       <input type="text" id="skill-name" placeholder="weekly-report">
       <label class="f">技能内容（Markdown：用途 / 工作流 / 模板 / 要求）</label>
       <textarea id="skill-content" rows="8" placeholder="# 技能名&#10;&#10;用途：…&#10;## 工作流&#10;1. …&#10;## 模板&#10;…&#10;## 要求&#10;- …" style="width:100%;"></textarea>
-      <button class="btn primary sm" id="btn-save-skill" style="margin-top:6px;">保存技能</button>
+      <div class="row" style="display:flex;gap:8px;margin-top:6px;">
+        <button class="btn primary sm" id="btn-save-skill" style="margin-top:0;flex:1;">保存技能</button>
+        <button class="btn ghost sm" id="btn-import-skill" style="margin-top:0;flex:1;">📥 导入 .md 文件</button>
+        <input type="file" id="skill-files" multiple accept=".md,.markdown,.txt" style="display:none;">
+      </div>
+      <div class="hint">导入：可选多个 .md 文件，文件名即技能名（非法字符自动转换，同名覆盖）；列表中每个技能可导出为 .md 分享。</div>
     </div>
 
     <div class="rp-body" id="rp-help">

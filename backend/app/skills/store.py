@@ -13,13 +13,13 @@ import threading
 from app.core.config import BASE_DIR
 
 SKILLS_DIR = os.path.join(BASE_DIR, "skills")
-_NAME_RE = re.compile(r"^[A-Za-z0-9_\-]{1,40}$")
+_NAME_RE = re.compile(r"^[\w\-]{1,40}$", re.UNICODE)  # 含中文；排除空格/点/斜杠等路径危险字符
 _lock = threading.Lock()
 
 
 def _path(name: str) -> str:
     if not _NAME_RE.match(name or ""):
-        raise ValueError("技能名仅允许字母/数字/下划线/连字符，长度 1-40")
+        raise ValueError("技能名仅允许文字/数字/下划线/连字符（可中文），长度 1-40")
     return os.path.join(SKILLS_DIR, f"{name}.md")
 
 
@@ -54,7 +54,7 @@ def read_skill(name: str) -> dict:
 def write_skill(name: str, content: str) -> dict:
     p = _path(name)
     if len(content) > 200_000:
-        raise ValueError("技能内容过大（上限 20 万字符）")
+        raise ValueError("技能名仅允许文字/数字/下划线/连字符（可中文），长度 1-40")
     with _lock:
         os.makedirs(SKILLS_DIR, exist_ok=True)
         with open(p, "w", encoding="utf-8", newline="\n") as f:

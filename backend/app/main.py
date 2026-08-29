@@ -85,7 +85,7 @@ async def get_default_room():
         history = conn.execute(
             "SELECT * FROM messages WHERE room_id='default' AND invalidated=0 ORDER BY id"
         ).fetchall()
-    llm_ready = bool(settings.llm_base_url and settings.llm_api_key and settings.llm_model)
+    llm_ready = settings.llm_ready()
     return {
         "room": {"id": "default", "name": "主房间"},
         "agents": [
@@ -153,8 +153,7 @@ async def set_llm_config(cfg: dict):
                     "INSERT INTO kv (k, v) VALUES (?,?)"
                     " ON CONFLICT(k) DO UPDATE SET v=excluded.v",
                     ("llm_" + key, getattr(settings, key)))
-    ready = bool(settings.llm_base_url and settings.llm_api_key and settings.llm_model)
-    return {"ok": True, "llm_ready": ready, "model": settings.llm_model}
+    return {"ok": True, "llm_ready": settings.llm_ready(), "model": settings.llm_model}
 
 
 @app.post("/api/llm-test")
@@ -162,7 +161,7 @@ async def test_llm():
     """API 连通性校验：向已配置端点发一条最小对话请求，确认链路可用。"""
     import time
 
-    if not (settings.llm_base_url and settings.llm_api_key and settings.llm_model):
+    if not settings.llm_ready():
         return {"ok": False, "error": "LLM 未配置（先填 Base URL / API Key / 模型名）"}
     try:
         from openai import AsyncOpenAI

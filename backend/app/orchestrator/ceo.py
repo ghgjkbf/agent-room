@@ -287,7 +287,7 @@ class Orchestrator:
         return {"accept": True, "reason": "占位验收：LLM 未配置或输出异常，默认通过"}
 
     async def _llm_json(self, system: str, user: str = "") -> dict | None:
-        if not (settings.llm_base_url and settings.llm_api_key and settings.llm_model):
+        if not settings.llm_ready():
             return None
         try:
             from openai import AsyncOpenAI

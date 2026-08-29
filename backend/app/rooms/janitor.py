@@ -28,7 +28,7 @@ def _get_cursor(conn, room_id) -> int:
 
 async def _summarize(blob: str, n: int) -> str:
     """LLM 总结群聊要点；未配置或失败降级占位摘要。"""
-    if settings.llm_base_url and settings.llm_api_key and settings.llm_model:
+    if settings.llm_ready():
         try:
             from openai import AsyncOpenAI
 

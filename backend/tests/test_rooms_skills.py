@@ -38,9 +38,17 @@ def test_skill_name_validation():
     with pytest.raises(ValueError):
         store.read_skill("../escape")  # 路径逃逸拒绝
     with pytest.raises(ValueError):
-        store.write_skill("含中文", "x")
+        store.write_skill("a/b", "x")  # 路径分隔符拒绝
+    with pytest.raises(ValueError):
+        store.write_skill("a b", "x")  # 空格拒绝
     with pytest.raises(ValueError):
         store.write_skill("ok", "x" * 300_000)  # 超限拒绝
+    # 中文技能名合法（文件名安全字符），用后即清
+    store.write_skill("周报模板", "# 中文技能")
+    try:
+        assert "中文技能" in store.read_skill("周报模板")["content"]
+    finally:
+        store.delete_skill("周报模板")
 
 
 def test_skill_tools_via_exec():
