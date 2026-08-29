@@ -98,15 +98,27 @@ async def get_default_room():
 
 @app.post("/api/llm-config")
 async def set_llm_config(cfg: dict):
-    """MVP：LLM 配置写入进程内 settings（V2 迁移到设置页+持久化）。"""
+    """MVP：LLM 配置写入进程内 settings（V2 迁移到设置页+持久化）。
+
+    模型名/Base URL 做 ASCII 归一化：复制粘贴常混入 U+2011 等非断行连字符
+    与全角空格，会让中转站查无此模型（model_not_found）。
+    """
+    _dash = str.maketrans({
+        "\u2010": "-", "\u2011": "-", "\u2012": "-", "\u2013": "-",
+        "\u2014": "-", "\u2212": "-", "－": "-", "\u00a0": " ", "　": " ",
+    })
+
+    def _norm(s: str) -> str:
+        return s.strip().translate(_dash)
+
     if "base_url" in cfg:
-        settings.llm_base_url = cfg["base_url"].strip().rstrip("/")
+        settings.llm_base_url = _norm(cfg["base_url"]).rstrip("/")
     if "api_key" in cfg:
         settings.llm_api_key = cfg["api_key"].strip()
     if "model" in cfg:
-        settings.llm_model = cfg["model"].strip()
+        settings.llm_model = _norm(cfg["model"])
     ready = bool(settings.llm_base_url and settings.llm_api_key and settings.llm_model)
-    return {"ok": True, "llm_ready": ready}
+    return {"ok": True, "llm_ready": ready, "model": settings.llm_model}
 
 
 async def _ws_loop(ws: WebSocket, bus, client_id: str):

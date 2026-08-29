@@ -58,6 +58,7 @@
   .feed{flex:1;overflow-y:auto;padding:20px 26px;display:flex;flex-direction:column;gap:14px;}
   .msg{max-width:66%;padding:9px 13px;border-radius:13px;font-size:13.5px;line-height:1.65;
     position:relative;box-shadow:0 1px 2px rgba(0,0,0,.05);word-break:break-word;}
+  .msg .body{white-space:pre-wrap;}
   .msg.human{align-self:flex-end;background:#95ec69;color:var(--ink);border-bottom-right-radius:4px;}
   .msg.agent{align-self:flex-start;background:var(--card);border:1px solid #ececf1;border-bottom-left-radius:4px;}
   .msg.system{align-self:center;background:#f0f0f3;color:#8a8a94;font-size:12px;border-radius:999px;
@@ -313,7 +314,7 @@
     <div class="rp-body" id="rp-members">
       <div class="grp">成员 · <span id="agent-count">0</span>（右侧下拉换绑身份卡）</div>
       <div id="member-list"></div>
-      <button class="btn primary sm" id="btn-add-external2" style="margin-top:8px;">＋ 添加外部成员（TRAE / ZCode）</button>
+      <button class="btn primary sm" id="btn-add-external2" style="margin-top:8px;">＋ 添加外部成员</button>
       <div class="grp" style="margin-top:16px;">快捷操作</div>
       <button class="btn danger-full" id="btn-stop-all2">■ 停止全部（P0 interrupt）</button>
       <div class="hint">P0 生效会取消所有 Agent 正在进行的生成。互聊不设上限，聊天记录由 Agent B 定时总结归档清理。</div>
@@ -366,9 +367,9 @@
       <div class="help-item"><b>急停</b>：顶栏 ⏹ 或成员面板「停止全部」= P0 interrupt，立即取消所有 Agent 正在进行的生成。</div>
 
       <div class="grp" style="margin-top:14px;">✨ 功能一览</div>
-      <div class="help-item"><b>房间成员</b>：内置双 Agent 并行流式回复——<b>Agent A·用户服务助手</b>（答疑、辅助提示词、指导意见、调度监督）；<b>Agent B·群聊管家</b>（定时总结归档聊天、监督清理）。外部成员（TRAE / ZCode）经 MCP 网关进群，与内置 Agent 平权协作。</div>
+      <div class="help-item"><b>房间成员</b>：内置双 Agent 并行流式回复——<b>Agent A·用户服务助手</b>（答疑、辅助提示词、指导意见、调度监督）；<b>Agent B·群聊管家</b>（定时总结归档聊天、监督清理）。外部 Agent 经 MCP 网关进群，与内置 Agent 平权协作。</div>
       <div class="help-item"><b>身份卡</b>：为 Agent 定义显示标签、风格、职责与<b>工具白名单</b>（fs.read / fs.write / fs.list 等，未勾选的工具调用会被拒绝）。绑/换绑在「成员」面板；外部成员绑定后「复制令牌」按钮会变为「绑定身份卡」。</div>
-      <div class="help-item"><b>外部成员管理</b>：「＋添加外部成员」创建后发放一次性令牌与 ZCode / TRAE 接入配置（可复制）；未绑定时可「复制令牌」重发（旧令牌即刻失效）；✕ 可删除成员。</div>
+      <div class="help-item"><b>外部成员管理</b>：「＋添加外部成员」创建后发放一次性令牌与 MCP 接入配置（可复制）；未绑定时可「复制令牌」重发（旧令牌即刻失效）；✕ 可删除成员。</div>
       <div class="help-item"><b>任务面板</b>：实时显示任务状态（待确认 / 执行中 / 已熔断 / 已完成）与每个子任务进度 chips；熔断暂停后可「继续执行」或「终止」。</div>
       <div class="help-item"><b>向量记忆</b>：公共记忆（任务验收后沉淀，全员可查）与 Agent 私有记忆（仅本人可读）物理隔离；Agent 工作时自动检索相关记忆注入上下文并标注来源时间。<b>互聊不设上限</b>，聊天记录由 Agent B 定时总结归档进公共记忆并清理存储，因此「文件/任务」等关键消息永久保留、纯聊天记录会被归档。</div>
       <div class="help-item"><b>模型配置</b>：「模型」面板填 OpenAI 兼容端点（Base URL / API Key / 模型名）即接入真实 LLM；未配置时全系统跑<b>占位模式</b>（功能链路完整可演示）。</div>
@@ -378,7 +379,7 @@
       <div class="help-item"><b>Q：保存文件提示版本冲突？</b><br>A：他人（或 Agent）在你编辑期间已更新该文件。系统已自动刷新为最新版，重新保存即可——这是乐观锁在防止互相覆盖。</div>
       <div class="help-item"><b>Q：之前的聊天记录去哪了？</b><br>A：被 Agent B 定时归档——摘要已沉淀到「记忆」面板的公共记忆，原文已清理以节省存储。任务、验收等关键消息永久保留。</div>
       <div class="help-item"><b>Q：任务卡在「已熔断·待裁决」？</b><br>A：任务执行期间互聊超限（默认 12 条），系统暂停并等你裁决：到「任务」面板选「继续执行」或「终止」。</div>
-      <div class="help-item"><b>Q：怎么让 TRAE / ZCode 进群？</b><br>A：「成员」面板 → ＋添加外部成员 → 复制弹窗里的令牌与接入配置（ZCode 填 .zcode/config.json；TRAE 用 stdio 桥命令），保存后该 Agent 即可经 MCP 网关收发消息、读写文件、承接任务。</div>
+      <div class="help-item"><b>Q：怎么让本机其他 Agent 进群？</b><br>A：本系统可接入多种 Agent——「成员」面板 → ＋添加外部成员 → 复制弹窗里的令牌与接入配置，按你的 Agent 支持的方式粘贴（支持 MCP HTTP 的用 HTTP 配置；仅支持命令行 MCP 的用 stdio 桥命令），保存后即可经网关收发消息、读写文件、承接任务。</div>
 
       <div class="grp" style="margin-top:14px;">🗺️ 路线图</div>
       <div class="hint">已完成：群聊协作 → 身份卡/提及/P0 → MCP 网关（外部进群）→ 文件工作区 + 微信式界面 → CEO 编排闭环 + 向量记忆 + 熔断。进行中：外部 Agent 承接排产单、网关二次权限校验、无人值守自动接活（详见 docs/STEP6-HANDOFF.md）。</div>
@@ -391,8 +392,8 @@
   <div class="modal">
     <div id="modal-form">
       <h3>添加外部成员</h3>
-      <label class="f">成员名称（如：TRAE·开发员）</label>
-      <input type="text" id="ext-name" placeholder="TRAE·开发员">
+      <label class="f">成员名称（如：开发员·外部）</label>
+      <input type="text" id="ext-name" placeholder="开发员·外部">
       <label class="f">绑定身份卡（可稍后换绑）</label>
       <select id="ext-identity" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
         <option value="">— 暂不绑定 —</option>
@@ -404,9 +405,9 @@
       <h3>✅ 成员已创建 · 令牌仅显示这一次</h3>
       <div class="hint">ROOM_TOKEN（重发将使旧令牌失效）：</div>
       <div class="token-box" id="ext-token"></div>
-      <div class="hint">ZCode 接入（<code>.zcode/config.json</code> → mcp.servers）：</div>
+      <div class="hint">接入配置 A · HTTP 方式（适用于支持 MCP HTTP 的 Agent，填入其 MCP 服务器配置）：</div>
       <textarea id="cfg-zcode" readonly></textarea>
-      <div class="hint">TRAE 接入（stdio 桥命令）：</div>
+      <div class="hint">接入配置 B · 命令行方式（适用于仅支持 stdio MCP 的 Agent，启动命令如下）：</div>
       <textarea id="cfg-trae" readonly></textarea>
       <div class="row" style="display:flex;gap:8px;margin-top:12px;">
         <button class="btn primary" id="btn-copy-all" style="margin-top:0;flex:1;">📋 复制全部配置</button>

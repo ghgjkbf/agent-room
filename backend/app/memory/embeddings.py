@@ -43,12 +43,16 @@ async def embed_with_llm(text: str, base_url: str, api_key: str, model: str) -> 
 
 
 async def embed_text(text: str) -> list[float]:
-    """优先走 LLM 端点（若配置），失败或未配置降级本地哈希向量。"""
+    """配置了 embedding 模型名时走 OpenAI 兼容端点，失败或未配置降级本地哈希向量。
+
+    默认不配置（llm_embedding_model 为空）——避免拿聊天模型端点硬打 /embeddings
+    造成无效重试；需要远程 embedding 时设 AGENT_ROOM_LLM_EMBEDDING_MODEL。
+    """
     from app.core.config import settings
 
-    if settings.llm_base_url and settings.llm_api_key:
+    if (settings.llm_embedding_model and settings.llm_base_url and settings.llm_api_key):
         v = await embed_with_llm(text, settings.llm_base_url,
-                                 settings.llm_api_key, "text-embedding-3-small")
+                                 settings.llm_api_key, settings.llm_embedding_model)
         if v:
             return v
     return embed_local(text)

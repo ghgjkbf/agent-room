@@ -11,6 +11,8 @@ class Settings:
     llm_base_url: str = os.environ.get("AGENT_ROOM_LLM_BASE_URL", "")
     llm_api_key: str = os.environ.get("AGENT_ROOM_LLM_API_KEY", "")
     llm_model: str = os.environ.get("AGENT_ROOM_LLM_MODEL", "")
+    # embedding 模型名（留空=不调远程，直接用本地哈希向量，避免无效远程重试）
+    llm_embedding_model: str = os.environ.get("AGENT_ROOM_LLM_EMBEDDING_MODEL", "")
     # 第 5 步编排：任务级熔断（互聊条数超限 → system @人类并暂停任务）
     task_max_chat_turns: int = int(os.environ.get("AGENT_ROOM_TASK_MAX_CHAT_TURNS", "12"))
     subtask_max_retries: int = int(os.environ.get("AGENT_ROOM_SUBTASK_MAX_RETRIES", "2"))

@@ -252,6 +252,11 @@ class Orchestrator:
 
     # ---------- LLM / 占位 ----------
 
+    @staticmethod
+    def _clean(s):
+        """LLM JSON 里常出现字面 \\n（双反斜杠转义），规范成真实换行。"""
+        return s.replace("\\n", "\n") if isinstance(s, str) else s
+
     async def _plan(self, goal: str, task_id: str, executors: list[str]) -> list[dict]:
         data = await self._llm_json(
             "你是 CEO 总编排器：把目标拆解为子任务排产单。只输出 JSON："
@@ -264,6 +269,9 @@ class Orchestrator:
             isinstance(s, dict) and s.get("title") and s.get("assignee") in executors
             for s in subs)
         if ok:
+            for s in subs[:3]:
+                s["title"] = self._clean(s.get("title", ""))
+                s["guidance"] = self._clean(s.get("guidance", ""))
             return subs[:3]
         return _placeholder_plan(goal, task_id, executors)
 
@@ -274,7 +282,8 @@ class Orchestrator:
             f"总目标：{goal}\n子任务：#{sub['seq']} {sub['title']}\n"
             f"要求：{sub['guidance']}\n交付内容：{delivery_text[:800]}")
         if data and isinstance(data.get("accept"), bool):
-            return {"accept": data["accept"], "reason": data.get("reason", "")}
+            return {"accept": data["accept"],
+                    "reason": self._clean(data.get("reason", ""))}
         return {"accept": True, "reason": "占位验收：LLM 未配置或输出异常，默认通过"}
 
     async def _llm_json(self, system: str, user: str = "") -> dict | None:
