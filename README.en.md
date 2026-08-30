@@ -6,6 +6,8 @@ A locally-running multi-agent group-chat workbench: it lets multiple agents on y
 
 Built as described in the [multi-agent collaboration system design doc](docs/agent-collab-design.html) (Chinese). Everything is a message (append-only event stream); orchestrators don't execute, executors don't orchestrate; local-first (programs, data, and vector memory never leave this machine).
 
+![Agent Room main view](docs/screenshots/main.png)
+
 ## Feature Overview
 
 **Group-Chat Collaboration**
@@ -35,6 +37,10 @@ Built as described in the [multi-agent collaboration system design doc](docs/age
 - Create new group chats with members of your choice; message streams / files / tasks / memory are isolated per room
 - WeChat-style three-column UI: conversation list + chat window + embedded panels (Files / Tasks / Members / Identity Cards / Models / Appearance / Skills / Memory / Help)
 - Appearance customization: background image / preset gradients, opacity adjustment, motion effects toggle (stored locally)
+
+**Task orchestration**: issue a goal → CEO plans → you approve → dependency-ordered dispatch → verified deliveries → summary.
+
+![Tasks panel](docs/screenshots/tasks.png)
 
 ## Quick Start
 

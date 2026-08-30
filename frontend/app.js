@@ -740,7 +740,7 @@ async function switchRoom(rid) {
 }
 async function loadRoomView() {
   const data = await (await fetch('/api/room/' + currentRoom)).json();
-  $('llm-chip').textContent = data.llm_ready ? 'LLM 已配置' : 'LLM 未配置';
+  $('llm-chip').textContent = data.llm_ready ? i18t('LLM 已配置') : i18t('LLM 未配置');
   await refreshMembers();
   await refreshFiles();
   await fetchTasks();
