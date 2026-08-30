@@ -227,6 +227,11 @@ function sendText() {
     if (!mentions.includes('agent_a') && tail.toLowerCase().startsWith('a')) mentions.push('agent_a');
     if (!mentions.includes('agent_b') && tail.toLowerCase().startsWith('b')) mentions.push('agent_b');
   }
+  if (pendingRefs.size) {
+    text = `${i18t('【引用工作区文件】')}${[...pendingRefs].join('、')}
+${text}`;
+    pendingRefs.clear(); hideRefsPop();
+  }
   ta.value = ''; hideMentionPop();
   updateScopeTip(mentions);
   ws.send(JSON.stringify({ type: 'chat', text, mentions }));
@@ -702,6 +707,11 @@ $('btn-issue-task').addEventListener('click', () => {
   const v = $('task-goal').value.trim();
   if (!v) return alertSys(i18t('请先填写任务目标'));
   if (!ws || ws.readyState !== WebSocket.OPEN) return alertSys('连接未就绪');
+  if (pendingRefs.size) {
+    v = `${i18t('【引用工作区文件】')}${[...pendingRefs].join('、')}
+${v}`;
+    pendingRefs.clear(); hideRefsPop();
+  }
   ws.send(JSON.stringify({ type: 'task', text: v }));
   $('task-goal').value = '';
   alertSys(i18t('任务已下达，CEO 正在拆解…'));
@@ -1013,6 +1023,40 @@ $('btn-archive-now').addEventListener('click', async () => {
   })).json();
   alertSys(i18t('归档完成：') + `${r.archived || 0} ${i18t('条')}`);
   refreshMemory();
+});
+
+/* ---------- 引用工作区文件（随消息发给 Agent） ---------- */
+let pendingRefs = new Set();
+function hideRefsPop() { $('refs-pop').style.display = 'none'; }
+function renderRefsPop() {
+  const pop = $('refs-pop');
+  if (!files.length) {
+    pop.innerHTML = `<div class="mp-item" style="color:var(--muted);">${i18t('（工作区暂无文件；先在「文件」面板上传或让 Agent 交付）')}</div>`;
+  } else {
+    pop.innerHTML = `<div class="mp-item all" style="font-weight:600;color:var(--brand-ink);">${i18t('点击选择要引用的文件（可多选）')}</div>` +
+      files.map(f => {
+        const on = pendingRefs.has(f.path);
+        return `<div class="mp-item ${on ? 'on' : ''}" data-ref="${esc(f.path)}" style="display:flex;gap:6px;align-items:center;">
+          <span>${on ? '☑' : '☐'}</span><span style="min-width:0;overflow:hidden;text-overflow:ellipsis;">📄 ${esc(f.path)}</span>
+          <span style="margin-left:auto;color:var(--muted);font-size:10px;">v${f.version}</span></div>`;
+      }).join('');
+  }
+  pop.style.display = 'block';
+  pop.querySelectorAll('[data-ref]').forEach(item => item.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    const p = item.dataset.ref;
+    pendingRefs.has(p) ? pendingRefs.delete(p) : pendingRefs.add(p);
+    renderRefsPop();
+  }));
+}
+$('btn-refs').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const pop = $('refs-pop');
+  if (pop.style.display === 'block') { hideRefsPop(); return; }
+  renderRefsPop();
+});
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#refs-pop') && !e.target.closest('#btn-refs')) hideRefsPop();
 });
 
 /* 语言切换：document 级委托（不依赖 boot 内联注册时序） */

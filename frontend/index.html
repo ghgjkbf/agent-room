@@ -294,7 +294,9 @@
     <div class="composer">
       <textarea id="draft" placeholder="输入消息，Enter 发送；输入 @ 弹出成员选择…"></textarea>
       <div id="mention-pop" class="mention-pop"></div>
+      <div id="refs-pop" class="mention-pop" style="display:none;max-height:260px;overflow-y:auto;min-width:260px;"></div>
       <div class="row">
+        <button class="icon-btn" id="btn-refs" title="引用工作区文件" style="padding:3px 8px;">📎</button>
         <span class="tip" id="scope-tip">广播模式：全体 Agent 可见可回</span>
         <span class="spacer"></span>
         <button class="send" id="btn-send">发 送</button>
