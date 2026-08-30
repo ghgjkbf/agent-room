@@ -63,3 +63,28 @@ def test_format_memory_context_tags_scope_and_time():
     ])
     assert "[公共·2026-08-29T10:" in lines and "[私有·2026-08-29T11:" in lines
     assert format_memory_context([]) == ""
+
+
+def test_memory_delete_and_clear(tmp_path):
+    """人类管理式删除：单条删除（公/私）与清空公共记忆。"""
+    import asyncio
+
+    async def _run():
+        root = str(tmp_path / "mem")
+        hub = MemoryHub(root)
+        await hub.write_public("r9", "结论一", {"id": "m1"}, "2026-08-29T10:00:00")
+        await hub.write_public("r9", "结论二", {"id": "m2"}, "2026-08-29T10:01:00")
+        await hub.write_private("agent_a", "私有笔记", {"id": "p1"}, "2026-08-29T10:02:00")
+
+        assert hub.delete_record("r9", None, "m1", private=False) is True
+        assert hub.delete_record("r9", None, "m1", private=False) is False  # 幂等
+        assert hub.delete_record("r9", "agent_a", "p1", private=True) is True
+        stats = hub.stats("r9")
+        assert stats["public"] == 1 and stats["agents"].get("agent_a", 0) == 0
+
+        assert hub.clear("r9", None, private=False) == 1
+        assert hub.stats("r9")["public"] == 0
+        # 持久化确认：重开实例仍为空
+        assert MemoryHub(root).stats("r9")["public"] == 0
+
+    asyncio.run(_run())

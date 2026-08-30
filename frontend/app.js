@@ -698,9 +698,31 @@ async function refreshMemory() {
   $('mem-stats').textContent = `${i18t('公共记忆')} ${s.public || 0} ${i18t('条')}` + (agentPart ? ` · ${i18t('私有记忆')} ${agentPart}` : '');
   const items = d.recent || [];
   $('mem-list').innerHTML = items.length
-    ? items.map(r => `<div class="mem-item">${esc(r.text)}<div class="mem-meta">${esc(r.scope)} · ${esc((r.created_at || '').slice(0, 16).replace('T', ' '))}</div></div>`).join('')
+    ? items.map(r => `<div class="mem-item">${esc(r.text)}
+        <div class="mem-meta">${esc(r.scope)} · ${esc((r.created_at || '').slice(0, 16).replace('T', ' '))}
+          <button class="mini-btn" data-mem-del="${esc(r.scope)}|${esc(r.id || '')}" style="color:#b42318;margin-left:6px;">${i18t('删除')}</button>
+        </div></div>`).join('')
     : `<div class="hint">${i18t('（暂无记忆；任务验收通过后自动沉淀）')}</div>`;
+  $('mem-list').querySelectorAll('[data-mem-del]').forEach(b => b.addEventListener('click', async () => {
+    const [scope, id] = b.dataset.memDel.split('|');
+    if (!id) return alertSys(i18t('该条记忆无 id，无法删除'));
+    if (!confirm(i18t('删除这条记忆？'))) return;
+    const qs = new URLSearchParams({ room_id: currentRoom, id, scope: scope === 'public' ? 'public' : 'private',
+      ...(scope !== 'public' ? { agent_id: scope.slice(8) } : {}) });
+    const r = await (await fetch(`/api/memory/item?${qs}`, { method: 'DELETE' })).json();
+    if (!r.ok) return alertSys(r.detail || i18t('删除失败'));
+    alertSys(i18t('已删除该条记忆。')); refreshMemory();
+  }));
 }
+$('btn-mem-clear').addEventListener('click', async () => {
+  if (!confirm(i18t('清空本群聊的全部公共记忆？（私有记忆不受影响）'))) return;
+  const r = await (await fetch('/api/memory/clear', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ room_id: currentRoom, scope: 'public' }),
+  })).json();
+  alertSys(i18t('已清空公共记忆：') + (r.cleared || 0) + i18t(' 条'));
+  refreshMemory();
+});
 
 /* ---------- 多房间（第 6 步）：会话列表 / 新建群聊 / 切换 ---------- */
 async function refreshRooms() {

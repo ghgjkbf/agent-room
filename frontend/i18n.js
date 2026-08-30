@@ -92,7 +92,7 @@ const I18N_EN = {
   /* 记忆面板 */
   '向量记忆 · 本地存储': 'Vector memory · local storage',
   '公共记忆：任务验收通过后沉淀；私有记忆：Agent 交付时写入、仅本人可读。检索 top-k 自动注入 Agent 上下文并标注来源时间。闲聊不入库。':
-    'Public memory settles after task acceptance; private memory is written on agent delivery and readable only by its owner. Top-k hits are injected into agent context with timestamps. Chit-chat is never stored.',
+    'Public memory settles after task acceptance; private memory is written on agent delivery and readable only by its owner. Top-k hits are injected into agent context with timestamps. Chit-chat is never stored. Each memory can be deleted individually, or clear the public store in one click.',
   /* 帮助面板标题（条目走整块模板） */
   '🚀 快速上手': '🚀 Quick start',
   '✨ 功能一览': '✨ Features',

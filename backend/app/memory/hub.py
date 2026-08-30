@@ -49,9 +49,24 @@ class Collection:
                 {"id": rid, "text": text, "vector": vector,
                  "meta": meta, "created_at": created_at}
             )
-            os.makedirs(os.path.dirname(self.path), exist_ok=True)
-            with open(self.path, "w", encoding="utf-8") as f:
-                json.dump(self.records, f, ensure_ascii=False)
+            self.save()
+
+    def save(self):
+        # 内部方法：调用方已持 self.lock（threading.Lock 不可重入，这里不再加锁）
+        os.makedirs(os.path.dirname(self.path), exist_ok=True)
+        with open(self.path, "w", encoding="utf-8") as f:
+            json.dump(self.records, f, ensure_ascii=False)
+
+    def remove(self, rid: str | None = None) -> int:
+        """按 id 删除记录；rid=None 清空。返回删除条数。"""
+        with self.lock:
+            before = len(self.records)
+            self.records = ([r for r in self.records if r.get("id") != rid]
+                            if rid is not None else [])
+            removed = before - len(self.records)
+            if removed:
+                self.save()
+            return removed
 
     def search(self, vector: list[float], k: int) -> list[dict]:
         with self.lock:
@@ -107,6 +122,16 @@ class MemoryHub:
         return [{"text": h["text"], "created_at": h["created_at"], "score": h["score"]}
                 for h in hits]
 
+    def delete_record(self, room_id: str, agent_id: str | None, record_id: str,
+                      private: bool) -> bool:
+        """删除一条记忆（人类管理操作）；private=True 时 agent_id 必填。"""
+        name = private_collection(agent_id) if private and agent_id             else public_collection(room_id)
+        return self._col(name).remove(record_id) == 1
+
+    def clear(self, room_id: str, agent_id: str | None, private: bool) -> int:
+        name = private_collection(agent_id) if private and agent_id             else public_collection(room_id)
+        return self._col(name).remove(None)
+
     def stats(self, room_id: str) -> dict:
         pub = self._col(public_collection(room_id)).records
         agents: dict[str, int] = {}
@@ -117,13 +142,14 @@ class MemoryHub:
         return {"public": len(pub), "agents": agents}
 
     def recent(self, room_id: str, n: int = 10) -> list[dict]:
-        items = [{"scope": "public", **{kk: r[kk] for kk in ("text", "meta", "created_at")}}
+        items = [{"scope": "public", "id": r.get("id", ""),
+                  **{kk: r[kk] for kk in ("text", "meta", "created_at")}}
                  for r in self._col(public_collection(room_id)).records[-n:]]
         for name in os.listdir(self.root) if os.path.isdir(self.root) else []:
             if name.startswith("agent_") and name.endswith("_private.json"):
                 aid = name[len("agent_"):-len("_private.json")]
                 items.extend(
-                    {"scope": f"private:{aid}",
+                    {"scope": f"private:{aid}", "id": r.get("id", ""),
                      **{kk: r[kk] for kk in ("text", "meta", "created_at")}}
                     for r in self._col(private_collection(aid)).records[-n:])
         items.sort(key=lambda x: x["created_at"], reverse=True)
