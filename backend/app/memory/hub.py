@@ -15,7 +15,7 @@ import os
 import threading
 
 from app.core.config import BASE_DIR
-from app.memory.embeddings import cosine, embed_text, loads_meta
+from app.memory.embeddings import cosine, embed_text
 
 MEM_ROOT = os.path.join(BASE_DIR, "data", "memory")
 

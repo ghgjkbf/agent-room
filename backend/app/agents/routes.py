@@ -10,7 +10,6 @@ import secrets
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from app.core.config import settings
 from app.core.db import db
 from app.core.message import now_cst
 
