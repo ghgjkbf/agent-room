@@ -215,7 +215,7 @@ function updateConvoLast(msg) {
 
 function sendText() {
   const ta = $('draft');
-  const text = ta.value.trim();
+  let text = ta.value.trim();
   if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
   const atIdx = text.lastIndexOf('@');
   let mentions = [];
