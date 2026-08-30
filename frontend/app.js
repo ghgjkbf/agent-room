@@ -54,6 +54,7 @@ function addBubble(msg) {
     body.textContent = msg.payload.text;
     el.appendChild(who); el.appendChild(body);
   }
+  el.dataset.ts = String(Date.now());
   feed.appendChild(el);
   feed.scrollTop = feed.scrollHeight;
   if (kind !== 'system') scheduleFoldCheck(el);
@@ -72,7 +73,10 @@ let streaming = {}; // agentId -> {el, body}
 function finalizeStreaming() {
   for (const aid in streaming) {
     const st = streaming[aid];
-    if (st && document.body.contains(st.el)) scheduleFoldCheck(st.el);
+    if (st && document.body.contains(st.el)) {
+      if (!(st.body && st.body.textContent)) st.el.remove();  // 终态仍空 = 空壳，移除
+      else scheduleFoldCheck(st.el);
+    }
   }
   streaming = {};
 }
@@ -122,7 +126,10 @@ function handleMessage(msg) {
       // 只终结该 Agent 自己的流——并行回复时清别人的注册会产生半格空泡
       const st = streaming[msg.sender.id];
       delete streaming[msg.sender.id];
-      if (st && document.body.contains(st.el)) scheduleFoldCheck(st.el);
+      if (st && document.body.contains(st.el)) {
+        if (!(st.body && st.body.textContent)) st.el.remove();
+        else scheduleFoldCheck(st.el);
+      }
       return;
     }
   }
@@ -905,6 +912,18 @@ $('skill-files').addEventListener('change', async () => {
   refreshSkills();
 });
 
+
+/* 空泡巡检：存活 10 秒仍无内容的 agent 气泡一律移除（覆盖一切未知产生路径） */
+setInterval(() => {
+  const feed = $('feed');
+  if (!feed) return;
+  const now = Date.now();
+  feed.querySelectorAll('.msg.agent, .msg.orch').forEach(el => {
+    const body = el.querySelector('.body');
+    const ts = +(el.dataset.ts || 0);
+    if (body && !body.textContent && ts && now - ts > 10000) el.remove();
+  });
+}, 5000);
 
 /* ---------- 外观（背景/透明度/动效，localStorage 持久化） ---------- */
 const BG_PRESETS = [
