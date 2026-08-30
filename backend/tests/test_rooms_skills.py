@@ -157,8 +157,8 @@ def test_agent_md_injected():
     from app.agents.responder import build_system_prompt, load_agent_md
 
     md = load_agent_md("agent_a")
-    assert "用户服务助手" in md and "行为规范" in md
-    assert "职责边界" in build_system_prompt("agent_a", None)
+    assert "用户服务助手" in md and "场景应对" in md and "决策优先级" in md
+    assert "职责清单" in build_system_prompt("agent_a", None)
     assert "群聊管家" in build_system_prompt("agent_b", None)
     assert load_agent_md("agent_nonexist") == ""
     # 绑定身份卡时以身份卡为准（md 不注入）
