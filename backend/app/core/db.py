@@ -185,6 +185,13 @@ def init_db():
         conn.execute(
             "UPDATE identities SET tools_allow=? WHERE id IN ('idf_steward','idf_assistant')"
             " AND tools_allow=?", (_new_default, _old_default))
+        # 第二代升级：追加 chat.archive（B 本职工具）
+        _gen2_old = _new_default
+        _gen2_new = ('["fs.list","fs.read","memory.query","skills.list","skills.read",'
+                     '"skills.write","doc.read","browser.open","chat.archive"]')
+        conn.execute(
+            "UPDATE identities SET tools_allow=? WHERE id IN ('idf_steward','idf_assistant')"
+            " AND tools_allow=?", (_gen2_new, _gen2_old))
         _steward_tools = '["fs.list","fs.read","memory.query","skills.list","skills.read"]'
         for _cid, _label, _resp, _tools in (
             ("idf_steward", "管家·出厂",

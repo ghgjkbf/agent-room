@@ -9,7 +9,7 @@ let roomLast = {};             // rid -> 最近一条预览文本
 const R = () => currentRoom;
 let agents = [];        // [{id,name,identity_id,identity_label,chat_turns}]
 let identities = [];    // [{id,label,persona,responsibilities,tools_allow,version}]
-const TOOL_OPTIONS = ['fs.read', 'fs.write', 'fs.list', 'skills.list', 'skills.read', 'skills.write', 'memory.query', 'doc.read', 'browser.open', 'shell.run'];
+const TOOL_OPTIONS = ['fs.read', 'fs.write', 'fs.list', 'skills.list', 'skills.read', 'skills.write', 'memory.query', 'doc.read', 'browser.open', 'shell.run', 'chat.archive'];
 
 /* 签名元素：成员专属色相（id 稳定哈希 → hsl 色环），一眼分辨谁在说话 */
 function hueFor(id) {
@@ -984,6 +984,17 @@ document.addEventListener('click', (e) => {
   if (!m || m.classList.contains('system')) return;
   if (m.classList.contains('folded') || m.classList.contains('expanded')) return; // 已在 pointerdown 处理
   m.classList.remove('pop'); void m.offsetWidth; m.classList.add('pop');
+});
+
+/* 手动归档清理（Agent B janitor 流程立即执行） */
+$('btn-archive-now').addEventListener('click', async () => {
+  if (!confirm(i18t('立即归档清理本群聊？（自上次归档以来的聊天将总结进公共记忆并清理原文）'))) return;
+  const r = await (await fetch('/api/rooms/archive', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ room_id: currentRoom }),
+  })).json();
+  alertSys(i18t('归档完成：') + `${r.archived || 0} ${i18t('条')}`);
+  refreshMemory();
 });
 
 /* 语言切换：document 级委托（不依赖 boot 内联注册时序） */

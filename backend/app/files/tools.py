@@ -173,7 +173,21 @@ CAP_TOOLS = [
     },
 ]
 
-ALL_TOOLS = FS_TOOLS + SKILL_TOOLS + MEMORY_TOOLS + CAP_TOOLS
+# ---- chat.archive 工具（群管家主动触发归档清理） ----
+
+CHAT_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "chat.archive",
+            "description": "立即归档清理当前群聊：把自上次归档以来的聊天总结为摘要"
+                           "（写入公共记忆）并清理原文。群管家的本职工具。",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+]
+
+ALL_TOOLS = FS_TOOLS + SKILL_TOOLS + MEMORY_TOOLS + CAP_TOOLS + CHAT_TOOLS
 
 
 def filter_tools(tools_allow: list[str] | None) -> list[dict]:
@@ -329,7 +343,7 @@ async def _exec_doc_read(room_id: str, path: str) -> str:
                           ensure_ascii=False)
     except ImportError:
         return json.dumps({"ok": False, "error":
-            "需要 markitdown 支持：backend\.venv\Scripts\pip install markitdown"},
+            r"需要 markitdown 支持：在 backend 下执行 pip install markitdown"},
             ensure_ascii=False)
     except Exception as e:
         return json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}"},
@@ -339,6 +353,11 @@ async def _exec_doc_read(room_id: str, path: str) -> str:
 async def exec_fs_tool(room_id: str, author: str, name: str, args: dict,
                        bus_registry=None) -> str:
     """异步包装：磁盘/DB 操作放线程池，写成功后补发 deliver。"""
+    if name == "chat.archive":
+        from app.rooms.janitor import run_janitor_once
+
+        r = await run_janitor_once(room_id, bus_registry, force=True)
+        return json.dumps({"ok": True, **r}, ensure_ascii=False)
     if name == "shell.run":
         return await _exec_shell(room_id, str(args.get("command", "")),
                                  int(args.get("timeout") or 30))

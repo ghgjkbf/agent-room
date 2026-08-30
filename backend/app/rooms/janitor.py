@@ -52,8 +52,11 @@ async def _summarize(blob: str, n: int) -> str:
     return f"（占位摘要·LLM 未配置）共 {n} 条聊天，开头内容：{head}…"
 
 
-async def run_janitor_once(room_id: str = "default", bus_registry=None) -> dict:
-    """跑一轮检查与归档；返回 {"archived": 归档条数}，未达阈值返回 {"archived": 0}。"""
+async def run_janitor_once(room_id: str = "default", bus_registry=None,
+                           force: bool = False) -> dict:
+    """跑一轮检查与归档；force=True 跳过阈值（手动触发/Agent 工具调用）。
+
+    返回 {"archived": 归档条数}，未达阈值且未强制时返回 {"archived": 0}。"""
     with db() as conn:
         last = _get_cursor(conn, room_id)
         rows = conn.execute(
@@ -61,7 +64,7 @@ async def run_janitor_once(room_id: str = "default", bus_registry=None) -> dict:
             " FROM messages WHERE room_id=? AND type='chat' AND id>? ORDER BY id",
             (room_id, last),
         ).fetchall()
-    if len(rows) < settings.janitor_min_msgs:
+    if not force and len(rows) < settings.janitor_min_msgs:
         return {"archived": 0}
 
     cursor = rows[-1]["id"]

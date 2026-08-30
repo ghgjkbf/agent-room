@@ -146,3 +146,40 @@ def test_delete_member_api():
             await delete_agent(aid)
 
     asyncio.run(_run())
+
+
+def test_chat_archive_tool_force(monkeypatch, tmp_path):
+    """chat.archive 工具：force 归档（低于阈值也执行）——B 主动清理的手段。"""
+    import asyncio
+    import json as _json
+    from app.files.tools import exec_fs_tool, filter_tools
+    from app.memory.hub import MemoryHub
+
+    room = f"arc_{uuid.uuid4().hex[:6]}"
+    hub = MemoryHub(str(tmp_path))
+    monkeypatch.setattr("app.memory.hub.hub", hub)
+    monkeypatch.setattr(settings, "llm_base_url", "")
+
+    async def _run():
+        _insert_chat(room, 2)  # 低于默认阈值 60
+        # 非 force 不动
+        r0 = _json.loads(await exec_fs_tool(room, "agent_b", "chat.archive", {}))             if False else None
+        # 工具调用 = force
+        r = _json.loads(await exec_fs_tool(room, "agent_b", "chat.archive", {}))
+        assert r["ok"] and r["archived"] == 2, r
+        assert hub.stats(room)["public"] == 1
+        with db() as conn:
+            left = conn.execute(
+                "SELECT COUNT(*) c FROM messages WHERE room_id=? AND type='chat'",
+                (room,)).fetchone()["c"]
+        assert left == 0
+        # 白名单独立
+        tools = filter_tools(["chat.archive"])
+        assert {t["function"]["name"] for t in tools} == {"chat.archive"}
+
+    try:
+        asyncio.run(_run())
+    finally:
+        with db() as conn:
+            conn.execute("DELETE FROM kv WHERE k=?", (cursor_key(room),))
+            conn.execute("DELETE FROM messages WHERE room_id=?", (room,))

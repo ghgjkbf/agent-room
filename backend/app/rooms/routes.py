@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from app.core.db import db
 from app.core.message import now_cst
+from app.rooms.bus import BusRegistry
 
 router = APIRouter(prefix="/api/rooms", tags=["rooms"])
 
@@ -58,6 +59,19 @@ async def create_room(body: RoomIn):
             "SELECT agent_id FROM room_members WHERE room_id=?", (rid,)).fetchall()
     return {"ok": True, "id": rid, "name": name,
             "members": [m["agent_id"] for m in members]}
+
+
+class ArchiveIn(BaseModel):
+    room_id: str = "default"
+
+
+@router.post("/archive")
+async def archive_now(body: ArchiveIn):
+    """手动触发一轮归档清理（跳过阈值；群管家 janitor 流程立即执行）。"""
+    from app.rooms.janitor import run_janitor_once
+
+    r = await run_janitor_once(body.room_id, BusRegistry, force=True)
+    return {"ok": True, **r}
 
 
 @router.delete("/{rid}")
