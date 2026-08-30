@@ -74,8 +74,6 @@
   .ripple{position:absolute;border-radius:50%;background:currentColor;opacity:.18;
     transform:scale(0);animation:ripple .45s ease-out forwards;pointer-events:none;}
   @keyframes ripple{to{transform:scale(2.6);opacity:0;}}
-  @keyframes bub-pop{0%{transform:scale(1);}35%{transform:scale(.97);}100%{transform:scale(1);}}
-  .msg.pop{animation:bub-pop .18s ease-out;}
   /* 气泡透明度（外观面板可调） */
   .msg.human{background:rgba(149,236,105,var(--bub-a,1));}
   .msg.agent,.msg.orch{background:rgba(255,255,255,var(--bub-a,1));}

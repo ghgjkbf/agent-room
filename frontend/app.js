@@ -1026,13 +1026,8 @@ document.addEventListener('pointerdown', (e) => {
   t.appendChild(rip);
   setTimeout(() => rip.remove(), 500);
 });
-document.addEventListener('click', (e) => {
-  if (!appearance.ripple) return;
-  const m = e.target.closest('.msg.agent, .msg.orch, .msg.deliver');
-  if (!m || m.classList.contains('system')) return;
-  if (m.classList.contains('folded') || m.classList.contains('expanded')) return; // 已在 pointerdown 处理
-  m.classList.remove('pop'); void m.offsetWidth; m.classList.add('pop');
-});
+// 气泡点击不再重播形变动画（scale 弹跳可能被流式 reflow 打断停在缩小帧，
+// 视觉上即「点击后缩半」）；折叠/展开交互在 pointerdown 处理，波纹保留
 
 /* 手动归档清理（Agent B janitor 流程立即执行） */
 $('btn-archive-now').addEventListener('click', async () => {
