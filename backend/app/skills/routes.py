@@ -36,6 +36,48 @@ async def write_skill(body: SkillIn):
         raise HTTPException(400, str(e))
 
 
+# 本机技能源（ZCode / TRAE 的技能库；导入 = 复制其 SKILL.md 为内部技能）
+BUILTIN_SOURCES = {
+    "zcode": r"D:\ai-use\.zcode\skills",
+    "trae": r"C:\Users\Administrator\.trae-cn\skills",
+    "trae-builtin": r"C:\Users\Administrator\.trae-cn\builtin_skills",
+}
+
+
+class ImportIn(BaseModel):
+    source: str                 # BUILTIN_SOURCES 的 key 或本机绝对路径
+    limit: int = 200
+
+
+@router.post("/import")
+async def import_local_skills(body: ImportIn):
+    """从本机技能目录批量导入 SKILL.md（目录名即技能名；同名覆盖）。"""
+    import os
+    import re as _re
+
+    src = BUILTIN_SOURCES.get(body.source, body.source)
+    if not os.path.isdir(src):
+        return {"ok": False, "detail": f"目录不存在：{src}"}
+    imported, skipped = [], []
+    for root, dirs, files in os.walk(src):
+        if "SKILL.md" not in files:
+            continue
+        name = _re.sub(r"[^\w\-]+", "-", os.path.basename(root)).strip("-").lower()
+        if not name:
+            continue
+        try:
+            with open(os.path.join(root, "SKILL.md"), encoding="utf-8") as f:
+                content = f.read()
+            store.write_skill(name, content)
+            imported.append(name)
+        except (OSError, ValueError) as e:
+            skipped.append({"dir": os.path.basename(root), "reason": str(e)})
+        if len(imported) >= body.limit:
+            break
+    return {"ok": True, "imported": imported, "skipped": skipped,
+            "count": len(imported)}
+
+
 @router.delete("/{name}")
 async def delete_skill(name: str):
     try:

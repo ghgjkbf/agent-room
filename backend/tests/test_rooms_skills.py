@@ -410,3 +410,66 @@ def test_overreach_announcement_wakes_agent_b(monkeypatch):
         assert b_replies, "Agent B 未被拉起通报"
 
     asyncio.run(_run())
+
+
+def test_capability_tools(tmp_path, monkeypatch):
+    """能力工具层：shell.run / skills.write / browser.open 负例 / 白名单独立。"""
+    import asyncio
+    import json as _json
+    from app.files.tools import exec_fs_tool, filter_tools
+
+    async def _run():
+        # shell.run：真实执行
+        r = _json.loads(await exec_fs_tool("default", "t", "shell.run",
+                                           {"command": "echo caps-ok"}))
+        assert r["ok"] and "caps-ok" in r["output"]
+        # skills.write：Agent 自建技能
+        r = _json.loads(await exec_fs_tool("default", "t", "skills.write",
+                                           {"name": "agent-made", "content": "# 自建"}))
+        assert r["ok"]
+        from app.skills import store
+        assert "自建" in store.read_skill("agent-made")["content"]
+        store.delete_skill("agent-made")
+        # browser.open 负例
+        r = _json.loads(await exec_fs_tool("default", "t", "browser.open",
+                                           {"url": "ftp://x"}))
+        assert not r["ok"]
+        # 白名单独立
+        tools = filter_tools(["shell.run"])
+        assert {tl["function"]["name"] for tl in tools} == {"shell.run"}
+
+    asyncio.run(_run())
+
+
+def test_skill_import_from_local(tmp_path):
+    """从本机目录导入 SKILL.md（目录名即技能名）。"""
+    import asyncio
+    import os
+    import sys as _sys
+
+    src = tmp_path / "skills-src" / "my-cool-skill"
+    src.mkdir(parents=True)
+    (src / "SKILL.md").write_text("# cool\n说明", encoding="utf-8")
+    # 嵌套目录（应跳过无 SKILL.md 的）
+    (tmp_path / "skills-src" / "empty").mkdir()
+
+    from app.skills import routes as sr, store
+
+    class _Body:
+        source = str(tmp_path / "skills-src")
+        limit = 200
+
+    async def _run():
+        r = await sr.import_local_skills(_Body())
+        return r
+
+    r = asyncio.run(_run())
+    assert r["ok"] and r["imported"] == ["my-cool-skill"]
+    assert "cool" in store.read_skill("my-cool-skill")["content"]
+    store.delete_skill("my-cool-skill")
+    # 不存在的目录
+    class _Bad:
+        source = str(tmp_path / "nope")
+        limit = 10
+    r = asyncio.run(sr.import_local_skills(_Bad()))
+    assert not r["ok"]

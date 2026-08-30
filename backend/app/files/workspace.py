@@ -25,6 +25,12 @@ WORKSPACE_ROOT = os.path.join(BASE_DIR, "workspace")
 _BAD = re.compile(r"(^/|^[A-Za-z]:|\.\.|\\|//|^(\./)+)")
 
 
+def ensure_dir(room_id: str) -> str:
+    d = room_dir(room_id)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
 def room_dir(room_id: str) -> str:
     d = os.path.join(WORKSPACE_ROOT, room_id)
     os.makedirs(d, exist_ok=True)

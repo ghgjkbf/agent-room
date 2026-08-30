@@ -92,7 +92,7 @@ def test_filter_tools_strict():
     assert filter_tools([]) == []
     assert filter_tools(None) == []
     # 白名单外的名字拿不到定义
-    assert filter_tools(["shell.run"]) == []
+    assert filter_tools(["git.status"]) == []  # 未实现的工具拿不到定义
 
 
 def test_exec_fs_tool_and_whitelist_enforcement():

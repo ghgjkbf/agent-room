@@ -178,6 +178,13 @@ def init_db():
             "INSERT OR IGNORE INTO room_members (room_id, agent_id, joined_at)"
             " SELECT room_id, id, ? FROM agents", (now_cst(),))
         # 出厂身份卡（幂等）：A/B 的默认工具白名单；用户可在界面换绑/编辑
+        # 出厂卡白名单升级：仍是旧默认集合时追加新能力工具（用户改过则不动）
+        _old_default = '["fs.list","fs.read","memory.query","skills.list","skills.read"]'
+        _new_default = ('["fs.list","fs.read","memory.query","skills.list","skills.read",'
+                        '"skills.write","doc.read","browser.open"]')
+        conn.execute(
+            "UPDATE identities SET tools_allow=? WHERE id IN ('idf_steward','idf_assistant')"
+            " AND tools_allow=?", (_new_default, _old_default))
         _steward_tools = '["fs.list","fs.read","memory.query","skills.list","skills.read"]'
         for _cid, _label, _resp, _tools in (
             ("idf_steward", "管家·出厂",

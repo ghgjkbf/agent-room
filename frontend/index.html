@@ -432,6 +432,15 @@
       <div class="grp">内部技能库 · 供群里 Agent 使用</div>
       <div class="hint" style="margin-bottom:8px;">技能 = 写法规范 / 模板 / 工作流（md 文档）。Agent 绑定含 skills.* 白名单的身份卡后，可在对话中自查技能并照做。</div>
       <div id="skill-list"></div>
+      <div class="grp" style="margin-top:12px;">从本机技能库导入</div>
+      <div class="row" style="display:flex;gap:8px;">
+        <select id="import-source" style="flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
+          <option value="zcode">ZCode 技能库（d:/ai-use/.zcode/skills）</option>
+          <option value="trae">TRAE 技能库（.trae-cn/skills）</option>
+          <option value="trae-builtin">TRAE 内置技能（.trae-cn/builtin_skills）</option>
+        </select>
+        <button class="btn primary sm" id="btn-import-local" style="margin-top:0;">导入</button>
+      </div>
       <div class="grp" style="margin-top:12px;">添加 / 更新技能</div>
       <label class="f">技能名（文字/数字/连字符，可中文，如 周报模板）</label>
       <input type="text" id="skill-name" placeholder="weekly-report">

@@ -9,7 +9,7 @@ let roomLast = {};             // rid -> 最近一条预览文本
 const R = () => currentRoom;
 let agents = [];        // [{id,name,identity_id,identity_label,chat_turns}]
 let identities = [];    // [{id,label,persona,responsibilities,tools_allow,version}]
-const TOOL_OPTIONS = ['fs.read', 'fs.write', 'fs.list', 'skills.list', 'skills.read', 'shell.run', 'git.status', 'memory.query'];
+const TOOL_OPTIONS = ['fs.read', 'fs.write', 'fs.list', 'skills.list', 'skills.read', 'skills.write', 'memory.query', 'doc.read', 'browser.open', 'shell.run'];
 
 /* 签名元素：成员专属色相（id 稳定哈希 → hsl 色环），一眼分辨谁在说话 */
 function hueFor(id) {
@@ -848,6 +848,18 @@ $('btn-save-skill').addEventListener('click', async () => {
   refreshSkills();
 });
 $('btn-import-skill').addEventListener('click', () => $('skill-files').click());
+$('btn-import-local').addEventListener('click', async () => {
+  const src = $('import-source').value;
+  if (!src) return alertSys(i18t('请选择技能来源'));
+  alertSys(i18t('正在从本机技能库导入…'));
+  const r = await (await fetch('/api/skills/import', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ source: src }),
+  })).json();
+  if (!r.ok) return alertSys(r.detail || i18t('导入失败'));
+  alertSys(i18t('导入完成：') + `${r.count} ${i18t('个')}` + (r.skipped && r.skipped.length ? ` (${i18t('跳过')} ${r.skipped.length})` : ''));
+  refreshSkills();
+});
 $('skill-files').addEventListener('change', async () => {
   const files = [...$('skill-files').files];
   $('skill-files').value = '';

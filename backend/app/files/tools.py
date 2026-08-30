@@ -107,7 +107,73 @@ MEMORY_TOOLS = [
     },
 ]
 
-ALL_TOOLS = FS_TOOLS + SKILL_TOOLS + MEMORY_TOOLS
+# ---- 能力工具层（解决内置 Agent 白板：电脑控制/浏览器/文档/技能创建） ----
+# 全部白名单门控；shell.run 属高危能力，不进出厂卡，需显式勾选
+
+CAP_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "shell.run",
+            "description": "在本机执行命令行（PowerShell/cmd），工作目录为房间工作区。高危能力："
+                           "仅在你确需执行命令时使用，输出超长会被截断。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "command": {"type": "string", "description": "要执行的命令"},
+                    "timeout": {"type": "integer", "description": "超时秒数，默认 30，最大 120"},
+                },
+                "required": ["command"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser.open",
+            "description": "读取网页内容：抓取 URL 并返回标题 + 正文文本（去脚本/样式，截断保存）。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "url": {"type": "string", "description": "完整 URL（http/https）"},
+                },
+                "required": ["url"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "doc.read",
+            "description": "读取文档文件为 Markdown（支持 pdf/docx/pptx/xlsx/epub 等，"
+                           "依赖 markitdown；工作区内传相对路径，本机文件传绝对路径）。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "path": {"type": "string", "description": "工作区相对路径或本机绝对路径"},
+                },
+                "required": ["path"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "skills.write",
+            "description": "创建或更新内部技能（把你的经验/方法沉淀为技能，供全群使用）。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "技能名（文字/数字/连字符）"},
+                    "content": {"type": "string", "description": "Markdown 内容：用途/工作流/模板/要求"},
+                },
+                "required": ["name", "content"],
+            },
+        },
+    },
+]
+
+ALL_TOOLS = FS_TOOLS + SKILL_TOOLS + MEMORY_TOOLS + CAP_TOOLS
 
 
 def filter_tools(tools_allow: list[str] | None) -> list[dict]:
@@ -189,9 +255,105 @@ def exec_fs_tool_sync(room_id: str, author: str, name: str, args: dict) -> str:
         return json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}"}, ensure_ascii=False)
 
 
+async def _exec_shell(room_id: str, command: str, timeout: int) -> str:
+    """电脑控制：本机命令执行（cwd=房间工作区；输出截断 4000 字）。"""
+    import asyncio as _aio
+    from app.files import workspace
+
+    workspace.ensure_dir(room_id)
+    timeout = max(1, min(timeout, 120))
+    try:
+        proc = await _aio.create_subprocess_shell(
+            command, cwd=workspace.room_dir(room_id),
+            stdout=_aio.subprocess.PIPE, stderr=_aio.subprocess.STDOUT)
+        try:
+            out, _ = await _aio.wait_for(proc.communicate(), timeout=timeout)
+            text = out.decode("utf-8", errors="replace")
+            code = proc.returncode
+        except _aio.TimeoutError:
+            proc.kill()
+            return json.dumps({"ok": False, "error": f"命令超时（>{timeout}s）已终止"},
+                              ensure_ascii=False)
+        return json.dumps({"ok": code == 0, "exit_code": code,
+                           "output": text[:4000]}, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}"},
+                          ensure_ascii=False)
+
+
+async def _exec_browser(url: str) -> str:
+    """浏览器控制（读取）：抓取网页标题与正文文本。"""
+    import re as _re
+
+    if not url.startswith(("http://", "https://")):
+        return json.dumps({"ok": False, "error": "仅支持 http/https URL"}, ensure_ascii=False)
+    try:
+        import httpx2
+
+        async with httpx2.AsyncClient(trust_env=False, timeout=20, follow_redirects=True) as c:
+            resp = await c.get(url)
+            html = resp.text
+        title = _re.search(r"<title[^>]*>(.*?)</title>", html, _re.S | _re.I)
+        body = _re.sub(r"(?is)<(script|style|noscript)[^>]*>.*?</\1>", " ", html)
+        body = _re.sub(r"(?s)<[^>]+>", " ", body)
+        body = _re.sub(r"\s+", " ", body).strip()
+        return json.dumps({"ok": True, "url": str(resp.url),
+                           "title": title.group(1).strip() if title else "",
+                           "text": body[:6000]}, ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}"},
+                          ensure_ascii=False)
+
+
+async def _exec_doc_read(room_id: str, path: str) -> str:
+    """文档技能：pdf/docx/pptx/xlsx 等 → Markdown（markitdown，可选依赖）。"""
+    import os
+
+    from app.files import workspace
+
+    if os.path.isabs(path):
+        fp = path
+    else:
+        try:
+            fp = workspace.read_file(room_id, path)["path"]
+            fp = os.path.join(workspace.room_dir(room_id), fp)
+        except Exception:
+            fp = os.path.join(workspace.room_dir(room_id), path)
+    if not os.path.isfile(fp):
+        return json.dumps({"ok": False, "error": f"文件不存在：{path}"}, ensure_ascii=False)
+    try:
+        from markitdown import MarkItDown
+
+        text = MarkItDown().convert(fp).text_content
+        return json.dumps({"ok": True, "path": path, "markdown": text[:12000]},
+                          ensure_ascii=False)
+    except ImportError:
+        return json.dumps({"ok": False, "error":
+            "需要 markitdown 支持：backend\.venv\Scripts\pip install markitdown"},
+            ensure_ascii=False)
+    except Exception as e:
+        return json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}"},
+                          ensure_ascii=False)
+
+
 async def exec_fs_tool(room_id: str, author: str, name: str, args: dict,
                        bus_registry=None) -> str:
     """异步包装：磁盘/DB 操作放线程池，写成功后补发 deliver。"""
+    if name == "shell.run":
+        return await _exec_shell(room_id, str(args.get("command", "")),
+                                 int(args.get("timeout") or 30))
+    if name == "browser.open":
+        return await _exec_browser(str(args.get("url", "")))
+    if name == "doc.read":
+        return await _exec_doc_read(room_id, str(args.get("path", "")))
+    if name == "skills.write":
+        from app.skills import store
+
+        try:
+            out = store.write_skill(str(args.get("name", "")), str(args.get("content", "")))
+            return json.dumps({"ok": True, **out}, ensure_ascii=False)
+        except (ValueError, OSError) as e:
+            return json.dumps({"ok": False, "error": str(e)}, ensure_ascii=False)
     if name == "memory.query":
         from app.memory.hub import hub
 
