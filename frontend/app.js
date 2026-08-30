@@ -1082,6 +1082,13 @@ document.addEventListener('change', (e) => {
 /* ---------- 启动 ---------- */
 async function boot() {
   applyLang(localStorage.getItem(I18N_LANG_KEY) || 'zh');
+  fetch('/api/health').then(r => r.json()).then(h => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.textContent = 'v' + (h.version || '?');
+    chip.title = '页面代码版本：若与你发布的版本不符，说明浏览器在跑旧缓存（Ctrl+F5 强刷）';
+    $('llm-chip').after(chip);
+  }).catch(() => {});
   await refreshRooms();
   await refreshIdentities();
   renderToolCheckboxes([]);   // 初始即渲染工具复选框（新建卡状态），一键白名单随时可用

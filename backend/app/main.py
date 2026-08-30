@@ -52,7 +52,12 @@ mount_gateway(app, BusRegistry)  # 包装上面的 lifespan，追加 MCP session
 
 @app.middleware("http")
 async def no_cache_frontend(request, call_next):
-    """前端入口不缓存：前端是频繁迭代的单文件页，避免浏览器跑旧 JS 配新 DOM。"""
+    # 根路径无版本参数 → 302 到 /?v=<版本>：HTML 缓存键随版本变化，
+    # 旧缓存（加 no-cache 头之前存的）从此不会再被命中
+    if request.url.path == "/" and not request.url.query:
+        from starlette.responses import RedirectResponse
+
+        return RedirectResponse(url=f"/?v={app.version}", status_code=302)
     resp = await call_next(request)
     if request.url.path in ("/", "/index.html", "/app.js"):
         resp.headers["Cache-Control"] = "no-cache, must-revalidate"
@@ -61,7 +66,7 @@ async def no_cache_frontend(request, call_next):
 
 @app.get("/api/health")
 async def health():
-    return {"ok": True, "service": "agent-room"}
+    return {"ok": True, "service": "agent-room", "version": app.version}
 
 
 @app.get("/api/room/default")
