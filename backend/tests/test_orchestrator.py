@@ -221,3 +221,44 @@ def test_full_loop_with_placeholder_acceptance(room, monkeypatch):
 
 def test_registry_singleton():
     assert OrchestratorRegistry.get("default") is OrchestratorRegistry.get("default")
+
+
+def test_task_cleanup_endpoints():
+    """已结束任务可删/可清空；未结束的拒绝。"""
+    from app.orchestrator import routes as tr
+
+    rid = f"tc_{uuid.uuid4().hex[:6]}"
+    ids = {}
+    with db() as conn:
+        for i, st in enumerate(("done", "aborted", "running")):
+            tid = f"task_tc{i}_{uuid.uuid4().hex[:4]}"
+            ids[st] = tid
+            ts = now_cst()
+            conn.execute(
+                "INSERT INTO tasks (id, room_id, goal, status, plan_json, created_at,"
+                " updated_at) VALUES (?,?,?,?,?,?,?)",
+                (tid, rid, f"目标{i}", st, "[]", ts, ts))
+            conn.execute(
+                "INSERT INTO subtasks (id, task_id, room_id, seq, title, assignee,"
+                " depends_on, created_at) VALUES (?,?,?,1,'t','agent_a','[]',?)",
+                (tid + "_s1", tid, rid, ts))
+
+    async def _run():
+        # running 拒绝删除
+        r = await tr.delete_task(ids["running"])
+        assert not r["ok"] and "未结束" in r["detail"]
+        # done 可删（连子任务）
+        assert (await tr.delete_task(ids["done"]))["ok"]
+        # 清空剩余已结束（aborted）
+        r = await tr.clear_finished_tasks(tr.ClearIn(room_id=rid))
+        assert r["ok"] and r["cleared"] == 1
+        # running 仍在
+        r = await tr.list_tasks(room_id=rid)
+        assert len(r["tasks"]) == 1 and r["tasks"][0]["status"] == "running"
+
+    try:
+        asyncio.run(_run())
+    finally:
+        with db() as conn:
+            conn.execute("DELETE FROM subtasks WHERE room_id=?", (rid,))
+            conn.execute("DELETE FROM tasks WHERE room_id=?", (rid,))

@@ -57,6 +57,39 @@ async def confirm_task(task_id: str, body: TaskAction):
     return r
 
 
+class ClearIn(BaseModel):
+    room_id: str = "default"
+
+
+@router.delete("/{task_id}")
+async def delete_task(task_id: str):
+    """删除一条已结束（done/aborted）的任务及其子任务；未结束的先作废。"""
+    with db() as conn:
+        row = conn.execute("SELECT status, room_id FROM tasks WHERE id=?", (task_id,)).fetchone()
+        if not row:
+            return {"ok": False, "detail": "任务不存在"}
+        if row["status"] not in ("done", "aborted"):
+            return {"ok": False, "detail": "任务未结束（先作废或等待完成）"}
+        conn.execute("DELETE FROM subtasks WHERE task_id=?", (task_id,))
+        conn.execute("DELETE FROM tasks WHERE id=?", (task_id,))
+    return {"ok": True, "id": task_id}
+
+
+@router.post("/clear-finished")
+async def clear_finished_tasks(body: ClearIn):
+    """一键清空该群聊全部已结束（done/aborted）的任务。"""
+    with db() as conn:
+        rows = conn.execute(
+            "SELECT id FROM tasks WHERE room_id=? AND status IN ('done','aborted')",
+            (body.room_id,)).fetchall()
+        for r in rows:
+            conn.execute("DELETE FROM subtasks WHERE task_id=?", (r["id"],))
+        conn.execute(
+            "DELETE FROM tasks WHERE room_id=? AND status IN ('done','aborted')",
+            (body.room_id,))
+    return {"ok": True, "cleared": len(rows)}
+
+
 @router.post("/{task_id}/abort")
 async def abort_task(task_id: str):
     with db() as conn:

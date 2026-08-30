@@ -654,12 +654,20 @@ function renderTasks(tasks) {
     else if (t.status === 'paused')
       actions = `<button class="btn primary sm" data-act="resume" data-id="${t.id}">${i18t('继续执行')}</button>` +
                 `<button class="btn danger-full sm" data-act="abort" data-id="${t.id}">${i18t('终止')}</button>`;
+    if (t.status === 'done' || t.status === 'aborted')
+      actions += `<button class="btn ghost sm" data-act="del" data-id="${t.id}" title="${i18t('删除该任务记录')}">🗑</button>`;
     return `<div class="task-card"><div class="task-goal">🎯 ${esc(t.goal)}</div>` +
       `<div class="task-status">${i18t('状态：')}${taskSt(t.status) || t.status_label}</div>${subs}` +
       (actions ? `<div class="task-actions">${actions}</div>` : '') + '</div>';
   }).join('');
   el.querySelectorAll('button[data-act]').forEach(b => b.addEventListener('click', async () => {
     const act = b.dataset.act;
+    if (act === 'del') {
+      if (!confirm(i18t('删除该任务记录？（群内消息保留）'))) return;
+      const r = await (await fetch(`/api/tasks/${b.dataset.id}`, { method: 'DELETE' })).json();
+      if (!r.ok) return alertSys(r.detail || i18t('删除失败'));
+      return fetchTasks();
+    }
     const url = `/api/tasks/${b.dataset.id}/${act === 'abort' ? 'abort' : 'confirm'}`;
     const r = await (await fetch(url, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -678,6 +686,16 @@ $('btn-tools-rec').addEventListener('click', () => {
 });
 $('btn-tools-clear').addEventListener('click', () => {
   $('id-tools').querySelectorAll('input').forEach(i => { i.checked = false; });
+});
+
+$('btn-tasks-clear').addEventListener('click', async () => {
+  if (!confirm(i18t('清空全部已结束（已完成/已作废）的任务记录？（群内消息保留）'))) return;
+  const r = await (await fetch('/api/tasks/clear-finished', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ room_id: currentRoom }),
+  })).json();
+  alertSys(i18t('已清空任务：') + (r.cleared || 0) + i18t(' 个'));
+  fetchTasks();
 });
 
 $('btn-issue-task').addEventListener('click', () => {
