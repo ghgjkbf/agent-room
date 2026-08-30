@@ -88,7 +88,26 @@ SKILL_TOOLS = [
     },
 ]
 
-ALL_TOOLS = FS_TOOLS + SKILL_TOOLS
+# ---- memory.query 工具（公共记忆检索；私有记忆永不进入结果） ----
+
+MEMORY_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "memory.query",
+            "description": "检索房间公共记忆（历史任务结论、归档摘要等）。只返回公共记忆，查不到私有记忆。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "检索问题，如 上次口号任务的结论"},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+]
+
+ALL_TOOLS = FS_TOOLS + SKILL_TOOLS + MEMORY_TOOLS
 
 
 def filter_tools(tools_allow: list[str] | None) -> list[dict]:
@@ -173,6 +192,15 @@ def exec_fs_tool_sync(room_id: str, author: str, name: str, args: dict) -> str:
 async def exec_fs_tool(room_id: str, author: str, name: str, args: dict,
                        bus_registry=None) -> str:
     """异步包装：磁盘/DB 操作放线程池，写成功后补发 deliver。"""
+    if name == "memory.query":
+        from app.memory.hub import hub
+
+        try:
+            hits = await hub.search_public(room_id, str(args.get("query", "")), k=5)
+            return json.dumps({"ok": True, "hits": hits}, ensure_ascii=False)
+        except Exception as e:
+            return json.dumps({"ok": False, "error": f"{type(e).__name__}: {e}"},
+                              ensure_ascii=False)
     result_text = await asyncio.to_thread(exec_fs_tool_sync, room_id, author, name, args)
     try:
         data = json.loads(result_text)

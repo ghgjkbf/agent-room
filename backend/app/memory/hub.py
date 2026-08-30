@@ -100,6 +100,13 @@ class MemoryHub:
         hits.sort(key=lambda x: -x["score"])
         return hits[:k]
 
+    async def search_public(self, room_id: str, query: str, k: int = 5) -> list[dict]:
+        """仅公共记忆检索（memory.query 工具用）；私有记忆不进候选。"""
+        v = await embed_text(query)
+        hits = self._col(public_collection(room_id)).search(v, k)
+        return [{"text": h["text"], "created_at": h["created_at"], "score": h["score"]}
+                for h in hits]
+
     def stats(self, room_id: str) -> dict:
         pub = self._col(public_collection(room_id)).records
         agents: dict[str, int] = {}

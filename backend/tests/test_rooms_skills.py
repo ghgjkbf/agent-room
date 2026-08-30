@@ -282,3 +282,28 @@ def test_gateway_list_rooms_scoped():
         asyncio.run(_run())
     finally:
         _cleanup_room(rid)
+
+
+def test_memory_query_tool_public_only(tmp_path, monkeypatch):
+    """memory.query 工具只返回公共记忆，任何 Agent 的私有记忆都不泄漏。"""
+    import asyncio
+    import tempfile
+    from app.files.tools import exec_fs_tool, filter_tools
+    from app.memory.hub import MemoryHub
+
+    hub = MemoryHub(str(tmp_path))
+    monkeypatch.setattr("app.memory.hub.hub", hub)
+
+    async def _run():
+        await hub.write_public("rm", "口号任务的结论：智聚群力", {}, "2026-08-29T10:00:00")
+        await hub.write_private("agent_x", "某人的私有笔记：绝密", {}, "2026-08-29T10:01:00")
+        import json as _json
+        r = _json.loads(await exec_fs_tool("rm", "agent_b", "memory.query",
+                                           {"query": "口号结论"}))
+        assert r["ok"] and "智聚群力" in r["hits"][0]["text"]
+        assert all("绝密" not in h["text"] for h in r["hits"])
+        # 白名单独立：只勾 memory.query 时拿不到 fs 工具
+        tools = filter_tools(["memory.query"])
+        assert {tl["function"]["name"] for tl in tools} == {"memory.query"}
+
+    asyncio.run(_run())

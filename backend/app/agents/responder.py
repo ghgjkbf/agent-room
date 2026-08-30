@@ -33,7 +33,7 @@ DEFAULT_ROLES = {
     "agent_a": ("Agent A·用户服务助手：服务人类用户——答疑解惑、辅助用户生成提示词、"
                 "提供指导意见、协助调度与安排任务、监督其他 Agent 的进展。"),
     "agent_b": ("Agent B·群聊管家：服务群聊本身——定期总结归档聊天记录、监督群聊"
-                "定时清理、维护群聊上下文连贯与秩序。"),
+                "定时清理、维护上下文连贯与秩序、监管成员行为防止越权。"),
 }
 
 # Agent 专属规范 md（backend/agent_md/{agent_id}.md，mtime 缓存）
@@ -213,6 +213,15 @@ async def run_turn(agent_id: str, identity: dict | None, user_text: str,
             if name not in allowed:
                 result = json.dumps({"ok": False, "error": f"工具 {name} 不在你的白名单内"},
                                     ensure_ascii=False)
+                # 越权拦截对群里可见（群管家据此通报与追踪）
+                try:
+                    if bus_registry:
+                        await bus_registry.get(room_id).publish(Message(
+                            room_id=room_id, type="system", priority=3,
+                            sender_kind="system", sender_id="bus",
+                            payload_text=f"⚠ 越权拦截：{agent_id} 尝试调用未授权工具 {name}，已拒绝。"))
+                except Exception:
+                    pass
             else:
                 result = await exec_fs_tool(room_id, agent_id, name, args, bus_registry)
             yield "tool", {"name": name, "args": args, "result": result}

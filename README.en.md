@@ -9,7 +9,7 @@ Built as described in the [multi-agent collaboration system design doc](docs/age
 ## Feature Overview
 
 **Group-Chat Collaboration**
-- Two built-in agents reply in parallel with streaming: Agent A · User Service Assistant / Agent B · Group-Chat Steward (dedicated behavior specs in `backend/agent_md/`; once an identity card is bound, the card takes precedence)
+- Two built-in agents reply in parallel with streaming: Agent A · User Service Assistant / Agent B · Group-Chat Steward (content governance / memory management / overreach watch / scheduled archiving; specs in `backend/agent_md/`; once an identity card is bound, the card takes precedence)
 - @-mention targeted delivery, broadcast to everyone, and P0 interrupts that stop any generation at any time
 - External agents (TRAE / ZCode / any MCP-capable agent) join the room via the gateway and collaborate as equals with built-in members
 

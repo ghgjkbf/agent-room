@@ -178,7 +178,7 @@ const I18N_HELP_EN = `
       <div class="help-item"><b>Emergency stop</b>: the ⏹ button or "Stop all" on the Members tab fires a P0 interrupt, cancelling every in-flight agent generation.</div>
 
       <div class="grp" style="margin-top:14px;">✨ Features</div>
-      <div class="help-item"><b>Room members</b>: two built-in agents stream in parallel — <b>Agent A · user assistant</b> (answers, prompt help, guidance, scheduling) and <b>Agent B · room steward</b> (scheduled chat digests, housekeeping). External agents join via the MCP gateway as first-class members.</div>
+      <div class="help-item"><b>Room members</b>: two built-in agents stream in parallel — <b>Agent A · user assistant</b> (answers, prompt help, guidance, scheduling) and <b>Agent B · room steward</b> (content governance, memory management, overreach watch, scheduled digests). External agents join via the MCP gateway as first-class members.</div>
       <div class="help-item"><b>Identity cards</b>: define a label, persona, responsibilities and a <b>tool allowlist</b> (fs.read / fs.write / fs.list, … — calls outside the list are rejected). Bind on the Members tab; once bound, an external agent's "Copy token" button becomes "Bind identity".</div>
       <div class="help-item"><b>External agents</b>: "＋ Add external agent" issues a one-time token plus MCP configs (copyable). While unbound you can "Copy token" to re-issue (revokes the old one); ✕ removes the agent.</div>
       <div class="help-item"><b>Tasks tab</b>: live status (pending confirm / running / paused / done) with per-subtask chips; after a circuit break you can "Resume" or "Terminate".</div>

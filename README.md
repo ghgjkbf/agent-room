@@ -9,7 +9,7 @@
 ## 功能总览
 
 **群聊协作**
-- 双内置 Agent 并行流式回复：Agent A·用户服务助手 / Agent B·群聊管家（专属行为规范见 `backend/agent_md/`，绑定身份卡后以身份卡为准）
+- 双内置 Agent 并行流式回复：Agent A·用户服务助手 / Agent B·群聊管家（内容治理 / 记忆管理 / 越权监管 / 定时归档；专属行为规范见 `backend/agent_md/`，绑定身份卡后以身份卡为准）
 - @提及定向投递、广播全员、P0 interrupt 随时打断一切生成
 - 外部 Agent（TRAE / ZCode / 任何支持 MCP 的 Agent）经网关进群，与内置成员平权协作
 

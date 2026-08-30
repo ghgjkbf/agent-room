@@ -244,6 +244,18 @@ def build_mcp_server(bus_registry) -> MCPServer:
             raise PermissionError(f"工具 {tool} 不在该成员身份卡的白名单内")
         return agent
 
+    async def _warn_violation(bus_registry, room_id: str, agent_id: str, tool: str):
+        """越权拒绝对群里可见（群管家据此通报与追踪）。"""
+        try:
+            from app.core.message import Message as _M
+
+            await bus_registry.get(room_id).publish(_M(
+                room_id=room_id, type="system", priority=3,
+                sender_kind="system", sender_id="bus",
+                payload_text=f"⚠ 越权拦截：{agent_id} 尝试调用未授权工具 {tool}，已拒绝。"))
+        except Exception:
+            pass
+
     @srv.tool()
     async def fs_list(agent_id: str, token: str, room_id: str = "default") -> str:
         """列出房间文件工作区的全部文件（路径 / 版本 / 作者）。"""
@@ -253,6 +265,8 @@ def build_mcp_server(bus_registry) -> MCPServer:
             result = await exec_fs_tool(room_id, agent_id, "fs.list", {})
             return result
         except Exception as e:
+            if isinstance(e, PermissionError):
+                await _warn_violation(bus_registry, room_id, agent_id, "fs.list")
             return _err(e)
 
     @srv.tool()
@@ -266,6 +280,8 @@ def build_mcp_server(bus_registry) -> MCPServer:
                                         {"path": path})
             return result
         except Exception as e:
+            if isinstance(e, PermissionError):
+                await _warn_violation(bus_registry, room_id, agent_id, "fs.read")
             return _err(e)
 
     @srv.tool()
@@ -285,6 +301,8 @@ def build_mcp_server(bus_registry) -> MCPServer:
             )
             return result
         except Exception as e:
+            if isinstance(e, PermissionError):
+                await _warn_violation(bus_registry, room_id, agent_id, "fs.write")
             return _err(e)
 
     # ---- 多房间（第 6 步）：成员自查所在房间 ----
@@ -316,6 +334,8 @@ def build_mcp_server(bus_registry) -> MCPServer:
             result = await exec_fs_tool("default", agent_id, "skills.list", {})
             return result
         except Exception as e:
+            if isinstance(e, PermissionError):
+                await _warn_violation(bus_registry, "default", agent_id, "skills.list")
             return _err(e)
 
     @srv.tool()
@@ -327,6 +347,24 @@ def build_mcp_server(bus_registry) -> MCPServer:
             result = await exec_fs_tool("default", agent_id, "skills.read", {"name": name})
             return result
         except Exception as e:
+            if isinstance(e, PermissionError):
+                await _warn_violation(bus_registry, "default", agent_id, "skills.read")
+            return _err(e)
+
+    @srv.tool()
+    async def memory_query(agent_id: str, token: str, query: str,
+                           room_id: str = "default") -> str:
+        """检索房间公共记忆（历史任务结论、归档摘要）；私有记忆不在结果内。"""
+        try:
+            g = _fs_guard(agent_id, token, "memory.query")
+            _ = g
+            _require_member(agent_id, room_id)
+            result = await exec_fs_tool(room_id, agent_id, "memory.query",
+                                        {"query": query})
+            return result
+        except Exception as e:
+            if isinstance(e, PermissionError):
+                await _warn_violation(bus_registry, room_id, agent_id, "memory.query")
             return _err(e)
 
     return srv
