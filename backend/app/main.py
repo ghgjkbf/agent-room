@@ -59,7 +59,20 @@ async def no_cache_frontend(request, call_next):
 
         return RedirectResponse(url=f"/?v={app.version}", status_code=302)
     resp = await call_next(request)
-    if request.url.path in ("/", "/index.html", "/app.js"):
+    ct = resp.headers.get("content-type", "")
+    if request.url.path in ("/", "/index.html") and "text/html" in ct:
+        # HTML 里的 JS 引用自动带上当前版本参数：发新版 → 缓存键变化 → 必拿新 JS
+        body_bytes = b""
+        async for chunk in resp.body_iterator:
+            body_bytes += chunk
+        html = body_bytes.decode("utf-8").replace(
+            'src="app.js"', f'src="app.js?v={app.version}"'
+        ).replace('src="i18n.js"', f'src="i18n.js?v={app.version}"')
+        from starlette.responses import Response as _Resp
+
+        return _Resp(html, status_code=200, media_type="text/html; charset=utf-8",
+                     headers={"Cache-Control": "no-cache, must-revalidate"})
+    if request.url.path in ("/", "/index.html", "/app.js", "/i18n.js"):
         resp.headers["Cache-Control"] = "no-cache, must-revalidate"
     return resp
 
