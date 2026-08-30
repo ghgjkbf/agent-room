@@ -119,8 +119,9 @@ function handleMessage(msg) {
       return;
     }
     if (msg.is_final) {
+      // 只终结该 Agent 自己的流——并行回复时清别人的注册会产生半格空泡
       const st = streaming[msg.sender.id];
-      finalizeStreaming();
+      delete streaming[msg.sender.id];
       if (st && document.body.contains(st.el)) scheduleFoldCheck(st.el);
       return;
     }
