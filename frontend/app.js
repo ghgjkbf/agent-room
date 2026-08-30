@@ -470,7 +470,7 @@ $('btn-save-llm').addEventListener('click', async () => {
   const r = await (await fetch('/api/llm-config', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg),
   })).json();
-  $('llm-chip').textContent = r.llm_ready ? 'LLM 已配置' : 'LLM 未配置';
+  $('llm-chip').textContent = r.llm_ready ? i18t('LLM 已配置') : i18t('LLM 未配置');
   alertSys(r.llm_ready ? 'LLM 配置已保存，正在校验连通性…' : '配置不完整。');
   if (!r.llm_ready) return;
   const tr = await (await fetch('/api/llm-test', { method: 'POST' })).json();
