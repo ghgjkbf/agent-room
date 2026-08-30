@@ -66,17 +66,48 @@ function agentLabel(id) {
   return (m && m.identity_label) ? m.identity_label : '未绑定';
 }
 
-/* 流式合并：并行 Agent 的片段会交替到达（A,B,A,B…），不能共用单一游标，
-   必须按 agent_id 各自维护活跃气泡；人类/系统消息终结全部活跃气泡。 */
+/* 流式渲染 v2：正式气泡只在有完整内容时诞生。
+   流式片段写入「幽灵面板」（虚线框、头像呼吸、随内容置底），终态一次性
+   落成正式气泡——气泡永远出生即完整，空壳在结构上不可能出现。 */
 let streaming = {}; // agentId -> {el, body}
 
+function ghostFor(aid) {
+  if (streaming[aid] && document.body.contains(streaming[aid].el)) return streaming[aid].el;
+  const meta = agents.find(a => a.id === aid);
+  const name = meta ? meta.name : aid;
+  const el = document.createElement('div');
+  el.className = 'msg agent ghost';
+  el.dataset.ts = String(Date.now());
+  el.innerHTML = `<div class="who"><i class="who-dot" style="--h:${hueFor(aid)}"></i>${esc(name)}<span class="lbl ghost-lbl">${i18t('生成中')}</span></div><div class="body"></div>`;
+  $('feed').appendChild(el);
+  $('feed').scrollTop = $('feed').scrollHeight;
+  streaming[aid] = { el, body: el.querySelector('.body') };
+  return el;
+}
+
+function commitGhost(aid, msg, text) {
+  const st = streaming[aid];
+  delete streaming[aid];
+  if (st && document.body.contains(st.el)) st.el.remove();
+  if (!text) return;  // 空内容直接丢弃——永不产生空泡
+  const el = addBubble(msg || { sender: { kind: 'agent', id: aid }, payload: { text: '' } });
+  el.querySelector('.body').textContent = text;
+  if (msg && msg.tool_summary && msg.tool_summary.length) {
+    const note = document.createElement('div');
+    note.className = 'tool-note';
+    note.textContent = msg.tool_summary.join(' ');
+    el.appendChild(note);
+  }
+  scheduleFoldCheck(el);
+}
+
 function finalizeStreaming() {
+  // 人类/系统消息（含 P0）到达：把还在流式的幽灵按已有内容落泡（可能不完整，
+  // 但绝不丢弃用户已看到的内容），空幽灵静默移除
   for (const aid in streaming) {
     const st = streaming[aid];
-    if (st && document.body.contains(st.el)) {
-      if (!(st.body && st.body.textContent)) st.el.remove();  // 终态仍空 = 空壳，移除
-      else scheduleFoldCheck(st.el);
-    }
+    const text = st && st.body ? st.body.textContent : '';
+    commitGhost(aid, null, text);
   }
   streaming = {};
 }
@@ -97,42 +128,27 @@ function scheduleFoldCheck(el) {
   }, 60);
 }
 
-function handleAgentChunk(msg) {
-  const st = streaming[msg.sender.id];
-  if (st && document.body.contains(st.el)) {
-    st.body.textContent += msg.payload.text;
-    return;
-  }
-  const bubble = addBubble(msg);
-  bubble.dataset.agent = msg.sender.id;
-  streaming[msg.sender.id] = { el: bubble, body: bubble.querySelector('.body') };
-}
-
 function handleMessage(msg) {
   clearTimeout(handleMessage._t);
 
   if (msg.type === 'system') { finalizeStreaming(); addBubble(msg); return; }
 
-  // 流式协议消息不是聊天内容，不能渲染成空气泡：
-  // 首片占位（空文本）→ 初始化该 Agent 的活跃气泡；终止信号（空文本）→ 收流
-  if (msg.type === 'chat' && msg.sender.kind === 'agent' && !msg.payload.text) {
-    if (msg.stream_seq === 0 && !msg.is_final) {
-      const bubble = addBubble(msg);
-      bubble.dataset.agent = msg.sender.id;
-      streaming[msg.sender.id] = { el: bubble, body: bubble.querySelector('.body') };
-      return;
+  // 流式片段 / 终止信号：写入幽灵面板，终态落泡（不再产生任何空气泡）
+  if (msg.type === 'chat' && msg.sender.kind === 'agent') {
+    const ghost = ghostFor(msg.sender.id);
+    const body = ghost.querySelector('.body');
+    if (msg.payload.text) {
+      body.textContent += msg.payload.text;
+      $('feed').appendChild(ghost);   // 活跃流保持在底部
+      $('feed').scrollTop = $('feed').scrollHeight;
     }
     if (msg.is_final) {
-      // 只终结该 Agent 自己的流——并行回复时清别人的注册会产生半格空泡
-      const st = streaming[msg.sender.id];
-      delete streaming[msg.sender.id];
-      if (st && document.body.contains(st.el)) {
-        if (!(st.body && st.body.textContent)) st.el.remove();
-        else scheduleFoldCheck(st.el);
-      }
+      commitGhost(msg.sender.id, msg, body.textContent);
       return;
     }
+    return;
   }
+
   if (msg.type === 'deliver') { finalizeStreaming(); addDeliverBubble(msg); refreshFiles(); return; }
   if (!(msg.type === 'chat' && msg.sender.kind === 'agent' && msg.payload.text)) {
     finalizeStreaming();
@@ -140,10 +156,8 @@ function handleMessage(msg) {
     return;
   }
 
-  $('typing').style.display = 'block';
-  $('typing').textContent = `${agentLabel(msg.sender.id)} ${i18t('正在输入…')}`;
-  handleAgentChunk(msg);
-  handleMessage._t = setTimeout(() => { $('typing').style.display = 'none'; }, 500);
+  // 理论上不会再走到这里（上面已分流）；兜底按普通气泡渲染
+  addBubble(msg);
 }
 
 /* deliver 消息：渲染成可点击附件样式（点击预览工作区文件） */
@@ -167,13 +181,13 @@ function addDeliverBubble(msg) {
 
 /* 工具调用事件（不落库的广播）：在活跃气泡下附一行小字 */
 function showToolEvent(msg) {
-  const st = streaming[msg.sender.id];
-  if (!st || !document.body.contains(st.el)) return;
-  let note = st.el.querySelector('.tool-note');
+  if (!streaming[msg.sender.id] || !document.body.contains(streaming[msg.sender.id].el)) return;
+  const el = streaming[msg.sender.id].el;
+  let note = el.querySelector('.tool-note');
   if (!note) {
     note = document.createElement('div');
     note.className = 'tool-note';
-    st.el.appendChild(note);
+    el.appendChild(note);
   }
   note.textContent = `🔧 ${msg.tool_event.name} ${msg.tool_event.result_ok ? '✓' : '✗'}`;
 }
@@ -912,18 +926,6 @@ $('skill-files').addEventListener('change', async () => {
   refreshSkills();
 });
 
-
-/* 空泡巡检：存活 10 秒仍无内容的 agent 气泡一律移除（覆盖一切未知产生路径） */
-setInterval(() => {
-  const feed = $('feed');
-  if (!feed) return;
-  const now = Date.now();
-  feed.querySelectorAll('.msg.agent, .msg.orch').forEach(el => {
-    const body = el.querySelector('.body');
-    const ts = +(el.dataset.ts || 0);
-    if (body && !body.textContent && ts && now - ts > 10000) el.remove();
-  });
-}, 5000);
 
 /* ---------- 外观（背景/透明度/动效，localStorage 持久化） ---------- */
 const BG_PRESETS = [

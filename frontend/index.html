@@ -91,6 +91,10 @@
   .msg .who-dot{width:7px;height:7px;border-radius:50%;flex:none;
     background:hsl(var(--h,240) 70% 45%);box-shadow:0 0 0 2px hsl(var(--h,240) 70% 45% /.18);}
   .msg .body{white-space:pre-wrap;}
+  /* 幽灵面板：流式生成中（虚线框 + 呼吸头像），终态落成正式气泡 */
+  .msg.ghost{border:1px dashed #c7c2f0;background:#fbfbfe;box-shadow:none;}
+  .msg.ghost .who-dot{animation:breath 1.6s ease-in-out infinite;}
+  .ghost-lbl{background:#ecfdf5;color:#047857;}
   .msg.human{align-self:flex-end;background:#95ec69;color:var(--ink);border-bottom-right-radius:4px;}
   .msg.agent{align-self:flex-start;background:var(--card);border:1px solid #ececf1;border-bottom-left-radius:4px;}
   .msg.system{align-self:center;background:#f0f0f3;color:#8a8a94;font-size:12px;border-radius:999px;
