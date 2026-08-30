@@ -28,7 +28,7 @@ from app.rooms.bus import BusRegistry
 from app.rooms.janitor import janitor_loop
 from app.skills import routes as skill_routes
 
-app = FastAPI(title="agent-room", version="0.7.0")
+app = FastAPI(title="agent-room", version="0.8.0")
 
 
 @asynccontextmanager

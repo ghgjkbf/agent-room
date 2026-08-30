@@ -1,6 +1,6 @@
 # Changelog · 能力清单（按迭代）
 
-## 第 7 轮：能力工具层 + 双 Agent 岗位化（v0.7.0）
+## 第 7 轮：能力工具层 + 双 Agent 岗位化（v0.8.0）
 
 - **内置 Agent 白板终结**：能力工具 shell.run（电脑控制）/ browser.open（网页读取）/ doc.read（文档转 Markdown）/ skills.write（Agent 自建技能）/ chat.archive（主动归档），全部白名单门控
 - **出厂身份卡**：管家·出厂（B）/ 服务·出厂（A）默认绑定，白名单条件升级机制；岗位手册（agent_md）与身份卡共存注入
