@@ -33,6 +33,10 @@ class ExternalAgentIn(BaseModel):
     room_id: str = "default"
 
 
+# 内置 Agent 的出厂身份卡（无卡 = 无工具；用户可在成员面板换绑）
+BUILTIN_BINDINGS = {"agent_a": "idf_assistant", "agent_b": "idf_steward"}
+
+
 def _ensure_internal(conn):
     for a in INTERNAL_AGENTS:
         row = conn.execute("SELECT id FROM agents WHERE id=?", (a["id"],)).fetchone()
@@ -44,6 +48,14 @@ def _ensure_internal(conn):
         conn.execute(
             "INSERT OR IGNORE INTO room_members (room_id, agent_id, joined_at)"
             " VALUES ('default', ?, ?)", (a["id"], now_cst()))
+        # 出厂绑定：仅在完全未绑定时生效（换绑/解绑过的尊重现状）
+        card = BUILTIN_BINDINGS.get(a["id"])
+        if card:
+            bound = conn.execute(
+                "SELECT identity_id FROM agents WHERE id=?", (a["id"],)).fetchone()
+            if bound and not bound["identity_id"]:
+                if conn.execute("SELECT id FROM identities WHERE id=?", (card,)).fetchone():
+                    conn.execute("UPDATE agents SET identity_id=? WHERE id=?", (card, a["id"]))
 
 
 @router.get("")

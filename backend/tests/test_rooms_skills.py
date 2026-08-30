@@ -161,10 +161,10 @@ def test_agent_md_injected():
     assert "职责清单" in build_system_prompt("agent_a", None)
     assert "群聊管家" in build_system_prompt("agent_b", None)
     assert load_agent_md("agent_nonexist") == ""
-    # 绑定身份卡时以身份卡为准（md 不注入）
+    # 绑定身份卡：卡提供标签/白名单，岗位手册仍共存注入
     prompt = build_system_prompt("agent_a", {"label": "测试卡", "persona": "",
                                              "responsibilities": [], "tools_allow": []})
-    assert "测试卡" in prompt and "职责边界" not in prompt
+    assert "测试卡" in prompt and "场景应对" in prompt
 
 
 # ---------- 验收真实性核验（优化迭代） ----------
@@ -305,5 +305,108 @@ def test_memory_query_tool_public_only(tmp_path, monkeypatch):
         # 白名单独立：只勾 memory.query 时拿不到 fs 工具
         tools = filter_tools(["memory.query"])
         assert {tl["function"]["name"] for tl in tools} == {"memory.query"}
+
+    asyncio.run(_run())
+
+
+def test_overreach_announcement_wakes_agent_b(monkeypatch):
+    """越权调用 → ⚠ 广播 + 系统 @agent_b 并拉起其通报回应（监管闭环）。"""
+    import asyncio
+    import json as _json
+    from app.agents import responder
+    from app.core.config import settings
+
+    class _Msg:
+        def __init__(self, **kw):
+            self.__dict__.update(kw)
+
+    class FakeBus:
+        def __init__(self):
+            self.published = []
+            self.registry_ref = None
+            self.room_id = "default"
+        async def publish(self, m):
+            self.published.append(m)
+        async def broadcast_raw(self, d):
+            pass
+
+    class FakeRegistry:
+        @staticmethod
+        def get(rid):
+            return bus
+
+    class _Delta:
+        def __init__(self, content=None, tool_calls=None):
+            self.content = content
+            self.tool_calls = tool_calls
+    class _Chunk:
+        def __init__(self, content=None, tool_calls=None):
+            self.choices = [type("C", (), {"delta": _Delta(content, tool_calls)})()]
+
+    class _Msg0:
+        pass
+
+    bus = FakeBus()
+    monkeypatch.setattr(settings, "llm_base_url", "http://fake")
+    monkeypatch.setattr(settings, "llm_api_key", "fake")
+    monkeypatch.setattr(settings, "llm_model", "fake")
+    monkeypatch.setattr(responder, "load_identity", lambda aid: {
+        "id": "c", "label": "受限卡", "persona": "", "responsibilities": [],
+        "tools_allow": ["fs.read"]})
+
+    def _tc():
+        fn = type("F", (), {"name": "fs.write", "arguments": _json.dumps({"path": "x.md", "content": "y"})})
+        return [type("TC", (), {"index": 0, "id": "c1", "function": fn()})()]
+
+    calls = {"n": 0}
+    class _Iter:
+        def __init__(self, items):
+            self._items = items
+        def __aiter__(self):
+            async def _gen():
+                for it in self._items:
+                    yield it
+            return _gen()
+
+    class _Completions:
+        async def create(self, *a, **kw):
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return _Iter([_Chunk(tool_calls=_tc())])
+            return _Iter([_Chunk(content="知道了")])
+
+    class _Chat:
+        completions = _Completions()
+    class _Client:
+        chat = _Chat()
+
+    async def _fake_create(*a, **kw):
+        return _Client()
+
+    async def _run():
+        import types
+        monkeypatch.setattr(responder.AsyncOpenAI, "chat", _Chat(), raising=False)
+        orig_init = responder.AsyncOpenAI.__init__
+        monkeypatch.setattr(
+            responder.AsyncOpenAI, "__init__",
+            lambda self, **kw: orig_init(self, **kw) or None, raising=False)
+        # 直接替换 client 构造：monkeypatch AsyncOpenAI 为返回 _Client 的类型
+        monkeypatch.setattr(responder, "AsyncOpenAI", lambda **kw: _Client())
+
+        gen = responder.run_turn("agent_x", responder.load_identity("agent_x") if False else {
+            "id": "c", "label": "受限卡", "persona": "", "responsibilities": [],
+            "tools_allow": ["fs.read"]}, "hi", bus_registry=FakeRegistry, room_id="default")
+        kinds = [k async for k, _ in gen]
+        assert "tool" in kinds
+        await asyncio.sleep(2.5)  # 让 B 的通报回应跑完（占位 0.35s/片）
+        warns = [m for m in bus.published if "越权拦截" in m.payload_text]
+        assert warns and warns[0].mentions == ["agent_b"]
+        import os
+        if os.environ.get("DBG"):
+            print("PUBLISHED:", [(m.type, getattr(m, "sender_id", None),
+                                  (m.payload_text or "")[:30]) for m in bus.published])
+        b_replies = [m for m in bus.published
+                     if m.type == "chat" and m.sender_id == "agent_b"]
+        assert b_replies, "Agent B 未被拉起通报"
 
     asyncio.run(_run())

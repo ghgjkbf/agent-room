@@ -36,6 +36,35 @@ DEFAULT_ROLES = {
                 "定时清理、维护上下文连贯与秩序、监管成员行为防止越权。"),
 }
 
+async def announce_overreach(bus_registry, room_id: str, agent_id: str, tool: str):
+    """越权拦截事件：群里可见 + 定向 @Agent B 并拉起其通报回应（监管闭环）。
+
+    B 不在线/不在房间时仅广播，不强行拉起。防死循环：B 的通报是普通 chat，
+    不会触发其他 Agent；B 也不再被 @。"""
+    if not bus_registry:
+        return
+    try:
+        bus = bus_registry.get(room_id)
+        await bus.publish(Message(
+            room_id=room_id, type="system", priority=3,
+            sender_kind="system", sender_id="bus",
+            payload_text=f"⚠ 越权拦截：{agent_id} 尝试调用未授权工具 {tool}，已拒绝。",
+            mentions=["agent_b"],
+        ))
+        with db() as conn:
+            on_duty = conn.execute(
+                "SELECT 1 FROM room_members m JOIN agents a ON a.id=m.agent_id"
+                " WHERE m.room_id=? AND m.agent_id='agent_b'", (room_id,)).fetchone()
+        if on_duty:
+            t = asyncio.create_task(respond_agent(bus, None, {"id": "agent_b"},
+                                                  override_text=(
+                                                      f"群内出现越权事件：成员 {agent_id} 刚尝试调用"
+                                                      f"未授权工具 {tool} 被系统拦截。请按管家职责通报。")))
+            GenerationRegistry.register("agent_b", t)
+    except Exception:
+        pass
+
+
 # Agent 专属规范 md（backend/agent_md/{agent_id}.md，mtime 缓存）
 _MD_CACHE: dict[str, tuple[float, str]] = {}
 
@@ -108,6 +137,10 @@ def build_system_prompt(agent_id: str, identity: dict | None) -> str:
         if resp:
             role += "；职责：" + "、".join(resp)
         sys_parts.append(role + "。只回答与身份相关的问题，越界时简短说明并引导提问者换人。")
+        # 岗位手册（agent_md）与身份卡共存：卡管标签与工具白名单，手册管行为细则
+        md = load_agent_md(agent_id)
+        if md:
+            sys_parts.append(md)
     elif agent_id in DEFAULT_ROLES:
         md = load_agent_md(agent_id)
         sys_parts.append(md if md else f"你是 {DEFAULT_ROLES[agent_id]}")
@@ -128,7 +161,8 @@ def placeholder_text(agent_id: str, identity: dict | None, user_text: str) -> st
 
 
 async def run_turn(agent_id: str, identity: dict | None, user_text: str,
-                   bus_registry=None, room_id: str = "default"):
+                   bus_registry=None, room_id: str = "default",
+                   override_text: str | None = None):
     """一个完整对话轮：产出文本片段；流中携带工具调用时执行工具并回灌，
     循环直至纯文本回复。
 
@@ -138,7 +172,8 @@ async def run_turn(agent_id: str, identity: dict | None, user_text: str,
     LLM 未配置时降级为本地占位（逐片 yield），与第 2 步行为一致。
     """
     if not settings.llm_ready():
-        for piece in _split(placeholder_text(agent_id, identity, user_text)):
+        shown = override_text or user_text
+        for piece in _split(shown):
             await asyncio.sleep(0.35)
             yield "text", piece
         return
@@ -158,7 +193,7 @@ async def run_turn(agent_id: str, identity: dict | None, user_text: str,
         pass  # 记忆库故障不阻断回复主链路
     messages = [
         {"role": "system", "content": system_prompt},
-        {"role": "user", "content": user_text},
+        {"role": "user", "content": override_text or user_text},
     ]
 
     for _round in range(MAX_TOOL_ROUNDS):
@@ -213,15 +248,8 @@ async def run_turn(agent_id: str, identity: dict | None, user_text: str,
             if name not in allowed:
                 result = json.dumps({"ok": False, "error": f"工具 {name} 不在你的白名单内"},
                                     ensure_ascii=False)
-                # 越权拦截对群里可见（群管家据此通报与追踪）
-                try:
-                    if bus_registry:
-                        await bus_registry.get(room_id).publish(Message(
-                            room_id=room_id, type="system", priority=3,
-                            sender_kind="system", sender_id="bus",
-                            payload_text=f"⚠ 越权拦截：{agent_id} 尝试调用未授权工具 {name}，已拒绝。"))
-                except Exception:
-                    pass
+                # 越权拦截对群里可见 + 拉 Agent B 通报（监管闭环）
+                await announce_overreach(bus_registry, room_id, agent_id, name)
             else:
                 result = await exec_fs_tool(room_id, agent_id, name, args, bus_registry)
             yield "tool", {"name": name, "args": args, "result": result}
@@ -239,7 +267,8 @@ def _split(text: str):
         yield text[i : i + CHUNK_SIZE]
 
 
-async def respond_agent(bus, msg: Message, agent: dict):
+async def respond_agent(bus, msg: Message | None, agent: dict,
+                        override_text: str | None = None):
     """单个 Agent 的回复协程：流式发布 chat 片段，异常转 system 消息。
 
     片段协议：同一 msg_id + stream_seq 递增，尾片 is_final=True。
@@ -254,9 +283,11 @@ async def respond_agent(bus, msg: Message, agent: dict):
         got_llm = settings.llm_ready()
         pieces = []
         tool_notes = []
-        async for kind, item in run_turn(aid, identity, msg.payload_text,
+        user_text = override_text or (msg.payload_text if msg else "")
+        async for kind, item in run_turn(aid, identity, user_text,
                                          bus_registry=bus.registry_ref,
-                                         room_id=bus.room_id):
+                                         room_id=bus.room_id,
+                                         override_text=override_text):
             if kind == "tool":
                 # 工具事件：纯广播（前端在气泡下附一行小字，不落库不进全文）
                 tool_notes.append(f"🔧 {item['name']}")

@@ -3,6 +3,7 @@
 MVP 使用 SQLite（设计文档 s11），事件流 messages 表 append-only。
 """
 
+import json
 import os
 import sqlite3
 import threading
@@ -176,6 +177,20 @@ def init_db():
         conn.execute(
             "INSERT OR IGNORE INTO room_members (room_id, agent_id, joined_at)"
             " SELECT room_id, id, ? FROM agents", (now_cst(),))
+        # 出厂身份卡（幂等）：A/B 的默认工具白名单；用户可在界面换绑/编辑
+        _steward_tools = '["fs.list","fs.read","memory.query","skills.list","skills.read"]'
+        for _cid, _label, _resp, _tools in (
+            ("idf_steward", "管家·出厂",
+             ["群内容治理", "记忆管理", "越权监管", "归档清理"], _steward_tools),
+            ("idf_assistant", "服务·出厂",
+             ["答疑", "提示词辅助", "调度建议", "进展监督"], _steward_tools),
+        ):
+            # responsibilities 列约定为 JSON 数组（load_identity json.loads）
+            conn.execute(
+                "INSERT OR IGNORE INTO identities (id, label, persona, responsibilities,"
+                " tools_allow, budget_turns, version, created_at) VALUES"
+                " (?,?, '', ?, ?, 6, 1, ?)",
+                (_cid, _label, json.dumps(_resp, ensure_ascii=False), _tools, now_cst()))
         # 优化迭代：子任务落最近一次验收结论（任务面板展示裁决依据）
         scols = {r[1] for r in conn.execute("PRAGMA table_info(subtasks)")}
         if scols and "last_receipt" not in scols:

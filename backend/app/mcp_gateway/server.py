@@ -245,16 +245,10 @@ def build_mcp_server(bus_registry) -> MCPServer:
         return agent
 
     async def _warn_violation(bus_registry, room_id: str, agent_id: str, tool: str):
-        """越权拒绝对群里可见（群管家据此通报与追踪）。"""
-        try:
-            from app.core.message import Message as _M
+        """越权拒绝：统一走 responder.announce_overreach（广播 + 拉 Agent B 通报）。"""
+        from app.agents.responder import announce_overreach
 
-            await bus_registry.get(room_id).publish(_M(
-                room_id=room_id, type="system", priority=3,
-                sender_kind="system", sender_id="bus",
-                payload_text=f"⚠ 越权拦截：{agent_id} 尝试调用未授权工具 {tool}，已拒绝。"))
-        except Exception:
-            pass
+        await announce_overreach(bus_registry, room_id, agent_id, tool)
 
     @srv.tool()
     async def fs_list(agent_id: str, token: str, room_id: str = "default") -> str:
