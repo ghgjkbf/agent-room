@@ -254,11 +254,10 @@ async function refreshMembers() {
           <option value="">— 未绑定 —</option>
           ${identities.map(c => `<option value="${c.id}" ${c.id === a.identity_id ? 'selected' : ''}>${c.label}</option>`).join('')}
         </select>`;
-    // 第 5.5 步：外部成员未绑定 → 复制令牌（拿去接入）；已绑定 → 绑定身份卡（换绑/解绑）
+    // 外部成员：始终可「绑定身份卡」（换绑/解绑）；未绑定时另有「复制令牌」用于接入
     const tokUi = external
-      ? (a.identity_id
-          ? `<button class="copy-tok bind-card" data-agent="${a.id}" data-name="${a.name}">${i18t('绑定身份卡')}</button>`
-          : `<button class="copy-tok" data-agent="${a.id}" data-name="${a.name}">${i18t('复制令牌')}</button>`) +
+      ? `<button class="copy-tok bind-card" data-agent="${a.id}" data-name="${a.name}">${i18t('绑定身份卡')}</button>` +
+        (a.identity_id ? '' : `<button class="copy-tok tok2" data-agent="${a.id}" data-name="${a.name}">${i18t('复制令牌')}</button>`) +
         `<button class="del-agent" data-agent="${a.id}" data-name="${a.name}" title="${i18t('删除成员')}">✕</button>`
       : '';
     return `
