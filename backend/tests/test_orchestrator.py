@@ -102,7 +102,7 @@ def test_placeholder_plan_and_confirm_dispatch(room):
     asyncio.run(_run())
 
 
-def test_reject_retry_then_pause_for_human(room, monkeypatch):
+def test_reject_no_breaker_unlimited(room, monkeypatch):
     rid, orch, bus = room
 
     async def _run():
@@ -116,27 +116,21 @@ def test_reject_retry_then_pause_for_human(room, monkeypatch):
             return {"accept": False, "reason": "不合格"}
 
         monkeypatch.setattr(orch, "_verdict", _reject)
-        for i in range(1, 4):  # 三次交付：2 次打回，第 3 次超上限熔断
+        # 打回无熔断上限：连续交付 5 次全部打回，任务保持 running
+        for i in range(1, 6):
             n_before = len(bus.by_type("receipt"))
             s_now = [s for s in _sub_rows(task["id"]) if s["id"] == sub["id"]][0]
             await orch._accept(bus, s_now, f"交付 v{i}")
             receipts = bus.by_type("receipt")[n_before:]
-            if i <= settings.subtask_max_retries:
-                assert receipts and receipts[0].payload_text.startswith("验收打回")
-            else:
-                sysm = [m for m in bus.published if m.type == "system"
-                        and "已暂停并 @人类" in m.payload_text]
-                assert sysm and sysm[-1].mentions == ["human"]
-                assert _task_rows(rid)[-1]["status"] == "paused"
-                return
-        pytest.fail("重试上限未触发熔断")
+            assert receipts and receipts[0].payload_text.startswith("验收打回")
+            assert _task_rows(rid)[-1]["status"] == "running"
+            assert [s for s in _sub_rows(task["id"]) if s["id"] == sub["id"]][0]["retries"] == i
 
     asyncio.run(_run())
 
 
-def test_chat_flood_breaker(room, monkeypatch):
+def test_chat_no_breaker(room):
     rid, orch, bus = room
-    monkeypatch.setattr(settings, "task_max_chat_turns", 2)
 
     async def _run():
         await orch.create_task(bus, "目标 X")
@@ -144,17 +138,12 @@ def test_chat_flood_breaker(room, monkeypatch):
         await orch.confirm(task["id"], "confirm")
         await orch.dispatch_ready(bus, task["id"])
 
-        # 非当前执行者（agent_b）的互聊 → 计入任务级熔断
-        await orch.notify_agent_final(bus, "agent_b", "闲聊一句")
+        # 互聊不熔断：任意多条非执行者发言，任务保持 running、无暂停消息
+        for i in range(5):
+            await orch.notify_agent_final(bus, "agent_b", f"闲聊第 {i} 句")
         assert _task_rows(rid)[-1]["status"] == "running"
-        await orch.notify_agent_final(bus, "agent_b", "再聊一句")
-        assert _task_rows(rid)[-1]["status"] == "paused"
         sysm = [m for m in bus.published if m.type == "system" and "熔断" in m.payload_text]
-        assert sysm and sysm[-1].mentions == ["human"]
-
-        # 恢复后继续跑
-        r = await orch.confirm(task["id"], "resume")
-        assert r["ok"] and _task_rows(rid)[-1]["status"] == "running"
+        assert not sysm
 
     asyncio.run(_run())
 

@@ -389,7 +389,7 @@
       <div class="grp" style="margin-top:14px;" data-i18n="grp.taskProgress">任务进度</div>
       <div style="margin-bottom:6px;"><button class="mini-btn" id="btn-tasks-clear" data-i18n="btn.tasksClear">🧹 清空已完成任务</button></div>
       <div id="task-list"></div>
-      <div class="hint" data-i18n="hint.taskFlow">流程：下达 → CEO 拆解 → 你确认 → 按依赖派发排产单 → 交付 → 验收/打回 → 汇总沉淀记忆。互聊超限自动熔断 @你裁决。</div>
+      <div class="hint" data-i18n="hint.taskFlow">流程：下达 → 编排拆解 → 你确认 → 按依赖派发排产单 → 交付 → 验收/打回（不设上限直至通过）→ 汇总沉淀记忆。</div>
     </div>
 
     <div class="rp-body" id="rp-members">
@@ -510,7 +510,7 @@
       <div class="help-item"><b>房间成员</b>：内置双 Agent 并行流式回复——<b>Agent A·用户服务助手</b>（答疑、辅助提示词、指导意见、调度监督）；<b>Agent B·群聊管家</b>（内容治理、记忆管理、越权监管、定时归档清理）。外部 Agent 经 MCP 网关进群，与内置 Agent 平权协作。</div>
       <div class="help-item"><b>身份卡</b>：为 Agent 定义显示标签、风格、职责与<b>工具白名单</b>（fs.read / fs.write / fs.list / memory.query 等，未勾选的工具调用会被拒绝）。绑/换绑在「成员」面板：外部成员始终有「绑定身份卡」按钮，未绑定时另有「复制令牌」用于接入。</div>
       <div class="help-item"><b>外部成员管理</b>：「＋添加外部成员」创建后发放一次性令牌与 MCP 接入配置（可复制）；未绑定时可「复制令牌」重发（旧令牌即刻失效）；✕ 可删除成员。</div>
-      <div class="help-item"><b>任务面板</b>：实时显示任务状态（待确认 / 执行中 / 已熔断 / 已完成）与每个子任务进度 chips；熔断暂停后可「继续执行」或「终止」。</div>
+      <div class="help-item"><b>任务面板</b>：实时显示任务状态（待确认 / 执行中 / 已暂停 / 已完成）与每个子任务进度 chips；任务暂停后可「继续执行」或「终止」。</div>
       <div class="help-item"><b>向量记忆</b>：公共记忆（任务验收后沉淀，全员可查）与 Agent 私有记忆（仅本人可读）物理隔离；Agent 工作时自动检索相关记忆注入上下文并标注来源时间。<b>互聊不设上限</b>，聊天记录由 Agent B 定时总结归档进公共记忆并清理存储，因此「文件/任务」等关键消息永久保留、纯聊天记录会被归档。</div>
       <div class="help-item"><b>模型配置</b>：「模型」面板填 OpenAI 兼容端点（Base URL / API Key / 模型名）即接入真实 LLM；保存后会<b>自动发一条测试消息校验连通性</b>（显示延迟与端点回复）。未配置时全系统跑<b>占位模式</b>（功能链路完整可演示）。</div>
       <div class="help-item"><b>多群聊</b>：左栏「＋新建群聊」可创建新群并勾选成员（内置 / 外部均可拉入）；每个群独立的消息流、文件工作区、任务与记忆，点击左栏会话项随时切换。</div>
@@ -520,7 +520,7 @@
       <div class="help-item"><b>Q：回复都是「占位」？</b><br>A：LLM 未配置。到「模型」面板接入 OpenAI 兼容端点即可。</div>
       <div class="help-item"><b>Q：保存文件提示版本冲突？</b><br>A：他人（或 Agent）在你编辑期间已更新该文件。系统已自动刷新为最新版，重新保存即可——这是乐观锁在防止互相覆盖。</div>
       <div class="help-item"><b>Q：之前的聊天记录去哪了？</b><br>A：被 Agent B 定时归档——摘要已沉淀到「记忆」面板的公共记忆，原文已清理以节省存储。任务、验收等关键消息永久保留。</div>
-      <div class="help-item"><b>Q：任务卡在「已熔断·待裁决」？</b><br>A：任务执行期间互聊超限（默认 12 条），系统暂停并等你裁决：到「任务」面板选「继续执行」或「终止」。</div>
+      <div class="help-item"><b>Q：任务会暂停吗？</b><br>A：正常情况不会——互聊与打回重做均不设上限，任务自动循环直至验收通过。若某任务被人为暂停，到「任务」面板选「继续执行」或「终止」即可。</div>
       <div class="help-item"><b>Q：怎么让本机其他 Agent 进群 / 建新群？</b><br>A：本系统可接入多种 Agent——「成员」面板 → ＋添加外部成员 → 复制弹窗里的令牌与接入配置，按你的 Agent 支持的方式粘贴（支持 MCP HTTP 的用 HTTP 配置；仅支持命令行 MCP 的用 stdio 桥命令），保存后即可经网关收发消息、读写文件、承接任务。</div>
 
       <div class="grp" style="margin-top:14px;">🗺️ 路线图</div>

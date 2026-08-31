@@ -8,8 +8,8 @@
 - 接线：挂为 RoomBus 监听器（bus.listeners），一切经 bus.publish 落库的
   消息都会流经 on_message（内部 WS / 网关 / deliver 统一覆盖）；
   内置执行者的最终回复另经 respond_agent 收尾钩子 notify_agent_final 进入。
-- 熔断：任务级互聊条数超 settings.task_max_chat_turns → system @人类 并暂停；
-  子任务连续打回超 settings.subtask_max_retries → 同样求助人类。
+- 熔断：已移除（互聊与打回重做均不设上限，任务只走
+  拆解 → 确认 → 派发 → 验收 → 汇总 的完整闭环，直至验收通过）。
 - LLM 未配置时占位路径：固定双子任务模板 + 占位验收默认通过，全流程可测。
 - 向量记忆：验收通过沉淀公共记忆；收到 deliver 写发送者私有记忆。
 """
@@ -88,24 +88,13 @@ class Orchestrator:
         # 其余（人类 chat / 无任务时的 agent chat）与编排无关，忽略
 
     async def notify_agent_final(self, bus, agent_id: str, text: str):
-        """respond_agent 收尾钩子：执行者交付说明 → 验收；其他互聊 → 计熔断。"""
+        """respond_agent 收尾钩子：执行者交付说明 → 验收。互聊不熔断（无上限）。"""
         task = self._active_task()
         if not task:
             return
         sub = self._open_subtask_of(agent_id)
         if sub:
             await self._accept(bus, sub, text)
-            return
-        with db() as conn:
-            conn.execute("UPDATE tasks SET chat_count = chat_count + 1,"
-                         " updated_at=? WHERE id=?", (now_cst(), task["id"]))
-            row = conn.execute("SELECT chat_count FROM tasks WHERE id=?",
-                               (task["id"],)).fetchone()
-        if row["chat_count"] >= settings.task_max_chat_turns:
-            await self._pause_for_human(
-                bus, task["id"],
-                f"熔断：任务执行期间互聊已达 {row['chat_count']} 条"
-                f"（上限 {settings.task_max_chat_turns}），已暂停并 @人类 裁决。")
 
     # ---------- 任务生命周期 ----------
 
@@ -231,22 +220,16 @@ class Orchestrator:
             else:
                 await self._finalize(bus, sub["task_id"])
         else:
-            retries = sub["retries"] + 1
-            if retries > settings.subtask_max_retries:
-                await self._pause_for_human(
-                    bus, sub["task_id"],
-                    f"子任务 #{sub['seq']} {sub['title']} 已被打回 {sub['retries']} 次仍未通过"
-                    f"（原因：{verdict['reason']}），已暂停并 @人类 裁决。")
-                return
+            # 打回重做不设熔断上限：反复打回直至验收通过
             with db() as conn:
                 conn.execute("UPDATE subtasks SET status='rejected', retries=?,"
                              " delivery_text=?, last_receipt=? WHERE id=?",
-                             (retries, delivery_text, verdict["reason"], sub["id"]))
+                             (sub["retries"] + 1, delivery_text, verdict["reason"], sub["id"]))
             await bus.publish(Message(
                 room_id=self.room_id, type="receipt", sender_kind="orchestrator",
                 sender_id="ceo", parent_task_id=sub["task_id"],
                 payload_text=(f"验收打回：#{sub['seq']} {sub['title']}——{verdict['reason']}"
-                              f"（第 {retries} 次，重做中）")))
+                              f"（第 {sub['retries'] + 1} 次，重做中）")))
             with db() as conn:
                 conn.execute("UPDATE subtasks SET status='dispatched' WHERE id=?",
                              (sub["id"],))

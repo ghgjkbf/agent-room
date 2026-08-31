@@ -45,8 +45,8 @@ const STR = {
   'btn.issueTask': ['🎯 下达任务', '🎯 Issue task'],
   'grp.taskProgress': ['任务进度', 'Progress'],
   'btn.tasksClear': ['🧹 清空已完成任务', '🧹 Clear finished tasks'],
-  'hint.taskFlow': ['流程：下达 → CEO 拆解 → 你确认 → 按依赖派发排产单 → 交付 → 验收/打回 → 汇总沉淀记忆。互聊超限自动熔断 @你裁决。',
-    'Flow: issue → CEO plans → you confirm → dispatch by dependency → delivery → review/reject → summary into memory. Auto circuit-break @you on chat overload.'],
+  'hint.taskFlow': ['流程：下达 → 编排拆解 → 你确认 → 按依赖派发排产单 → 交付 → 验收/打回（不设上限直至通过）→ 汇总沉淀记忆。',
+    'Flow: issue → orchestration plans → you confirm → dispatch by dependency → delivery → review/reject (no cap, redone until accepted) → summary into memory.'],
   /* 成员面板 */
   'grp.members': ['成员', 'Members'],
   'grp.membersSub': ['（右侧下拉换绑身份卡）', '(switch identity via dropdown)'],
@@ -177,7 +177,7 @@ const STR = {
   'st.accepted': ['已验收', 'Accepted'],
   'st.rejected': ['已打回', 'Rejected'],
   'st.awaiting': ['待确认', 'Awaiting confirm'],
-  'st.paused': ['已熔断·待裁决', 'Paused · awaiting ruling'],
+  'st.paused': ['已暂停', 'Paused'],
   'st.done': ['已完成', 'Done'],
   'st.aborted': ['已作废', 'Discarded'],
   'dyn.noTasks': ['（暂无任务；在上方填写目标并下达，CEO 将拆解为排产单）', '(No tasks yet; set a goal above and issue it — CEO will break it into work orders)'],
@@ -294,7 +294,7 @@ const I18N_HELP_EN = `
       <div class="help-item"><b>Room members</b>: two built-in agents stream replies in parallel — <b>Agent A · User Service Assistant</b> (Q&A, prompt help, guidance, dispatch supervision) and <b>Agent B · Room Butler</b> (content governance, memory management, privilege supervision, scheduled archiving). External agents join via the MCP gateway and collaborate on equal footing.</div>
       <div class="help-item"><b>Identity cards</b>: define an agent's label, persona, responsibilities and <b>tool whitelist</b> (fs.read / fs.write / fs.list / memory.query etc. — non-whitelisted tool calls are rejected). Bind / rebind in the Members panel: external members always have a "Bind identity card" button, plus "Copy token" for onboarding while unbound.</div>
       <div class="help-item"><b>External members</b>: "＋ Add external member" issues a one-time token and MCP connection config (copyable); while unbound you can re-issue via "Copy token" (the old token is invalidated instantly); ✕ removes a member.</div>
-      <div class="help-item"><b>Tasks panel</b>: live task status (awaiting confirm / running / paused / done) plus per-subtask progress chips; when circuit-broken you can "Resume" or "Terminate".</div>
+      <div class="help-item"><b>Tasks panel</b>: live task status (awaiting confirm / running / paused / done) plus per-subtask progress chips; a paused task can be "Resume"d or "Terminate"d.</div>
       <div class="help-item"><b>Vector memory</b>: shared memory (distilled after task acceptance, visible to all) and each agent's private memory (readable only by its owner) are physically isolated; while working, agents auto-retrieve relevant memories into context with source timestamps. <b>Agent-to-agent chat is unlimited</b>; Agent B periodically summarizes and archives chat logs into shared memory and prunes the originals, so key messages (files / tasks) are kept forever while pure chatter gets archived.</div>
       <div class="help-item"><b>Model config</b>: fill in an OpenAI-compatible endpoint (Base URL / API Key / model) in the Models panel to hook up a real LLM; on save a <b>test message verifies connectivity</b> (latency and reply shown). Without config the whole system runs in <b>placeholder mode</b> (full pipeline, demo-friendly).</div>
       <div class="help-item"><b>Multiple rooms</b>: "＋ New room" in the left rail creates a room and picks members (built-in / external); each room has its own message feed, file workspace, tasks and memory. Click a session in the left rail to switch.</div>
@@ -308,7 +308,7 @@ const I18N_HELP_EN = `
       <div class="help-item"><b>Q: How do I onboard a local agent / create a room?</b><br>A: Members panel → ＋ Add external member → copy the token & connection config from the popup, then paste it into your agent the way it supports (HTTP config for MCP-HTTP agents; the stdio bridge command for command-line-only MCP agents). Once connected it can chat, read/write files and take tasks through the gateway.</div>
 
       <div class="grp" style="margin-top:14px;">🗺️ Roadmap</div>
-      <div class="hint">Shipped: group chat → identity cards / mentions / P0 → MCP gateway (external agents) → file workspace + WeChat-style UI → CEO orchestration loop + vector memory + circuit breaker. In progress: external agents taking work orders, second-layer gateway permission checks, unattended task intake.</div>`;
+      <div class="hint">Shipped: group chat → identity cards / mentions / P0 → MCP gateway (external agents) → file workspace + WeChat-style UI → CEO orchestration loop + vector memory. In progress: external agents taking work orders, second-layer gateway permission checks, unattended task intake.</div>`;
 
 /* 消息流界面 chrome（.who 署名 / .lbl 标签 / .fold-tip / ghost .ghost-lbl）随语言互换。
    只替换「整个文本节点精确等于」词条的节点，消息正文（长文本节点）天然不受影响。 */
