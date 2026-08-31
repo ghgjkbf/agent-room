@@ -5,257 +5,295 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Agent Room · 多Agent群聊协作</title>
 <style>
+  /* ===== 深色指挥室 / Ops Console 设计令牌 ===== */
   :root{
-    --ink:#1b1b1f; --muted:#5c5c66; --line:#e6e6ec; --bg:#f6f6f8;
-    --card:#ffffff; --brand:#4b3fe3; --brand-soft:#f2f0ff; --brand-ink:#2a2380;
-    --accent:#0f766e; --warn:#b45309; --danger:#b42318; --wx-green:#07c160;
-    /* 色彩纪律：靘紫=品牌/系统侧；微信绿只出现在人类气泡；琥珀/绿/红=状态语义 */
-    --mono:ui-monospace,"Cascadia Mono",Consolas,"Courier New",monospace;
+    --bg:#0d0f12; --panel:#14171c; --card:#191d23; --card-2:#1f242c;
+    --line:#262c35; --line-2:#333b46;
+    --ink:#e9e7e2; --muted:#8b93a1; --faint:#5b6472;
+    --brand:#f0a63c; --brand-strong:#ffb84d; --brand-soft:rgba(240,166,60,.14);
+    --brand-ink:#16130b;
+    --accent:#3ecfb2; --warn:#e8b339; --danger:#ef6a5e; --ok:#4cc38a;
+    --wx-green:#2fbf5f;
+    /* 色彩纪律：琥珀=人类操作侧；teal=系统/编排侧；成员=专属色相；红/黄/绿=状态语义 */
+    --mono:'JetBrains Mono',ui-monospace,"Cascadia Mono",Consolas,"Courier New",monospace;
   }
   *{box-sizing:border-box;margin:0;padding:0;}
   body{font-family:"Segoe UI","PingFang SC","Microsoft YaHei",system-ui,sans-serif;
     color:var(--ink);background:var(--bg);height:100vh;overflow:hidden;
     font-feature-settings:"tnum";}
-  /* 键盘焦点可见 + 细滚动条（质量底线） */
   button:focus-visible,a:focus-visible,[tabindex]:focus-visible{outline:2px solid var(--brand);outline-offset:2px;}
   ::-webkit-scrollbar{width:6px;height:6px;}
-  ::-webkit-scrollbar-thumb{background:#d9d9e0;border-radius:3px;}
-  ::-webkit-scrollbar-thumb:hover{background:#c4c4cc;}
+  ::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:3px;}
+  ::-webkit-scrollbar-thumb:hover{background:#454f5c;}
+  ::-webkit-scrollbar-corner{background:transparent;}
   @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important;}}
   #app{display:flex;height:100vh;}
 
-  /* ===== 左侧：会话列表（微信式） ===== */
-  #chat-list{width:262px;min-width:240px;background:var(--card);border-right:1px solid var(--line);
+  /* ===== 左侧：会话列表 ===== */
+  #chat-list{width:262px;min-width:240px;background:var(--panel);border-right:1px solid var(--line);
     display:flex;flex-direction:column;flex:none;}
   .cl-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px;}
-  .cl-head .logo{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#1a1759,#4b3fe3);
-    color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex:none;}
+  .cl-head .logo{width:30px;height:30px;border-radius:9px;
+    background:linear-gradient(135deg,#ffb84d,#c97f16);
+    color:var(--brand-ink);display:flex;align-items:center;justify-content:center;
+    font-size:12px;font-weight:800;flex:none;letter-spacing:.5px;}
   .cl-head h1{font-size:15px;}
-  .cl-head small{display:block;color:var(--muted);font-weight:400;font-size:11px;}
-  .cl-search{margin:10px 12px;padding:7px 12px;background:#f4f4f5;border-radius:8px;
-    color:#b6b6bd;font-size:12px;user-select:none;}
-  .cl-group{font-size:11px;color:var(--muted);padding:8px 16px 4px;}
+  .cl-head small{display:block;color:var(--faint);font-weight:400;font-size:11px;}
+  .cl-search{margin:10px 12px;padding:7px 12px;background:var(--card);border:1px solid var(--line);
+    border-radius:8px;color:var(--faint);font-size:12px;user-select:none;}
+  .cl-search input{border:none;background:none;outline:none;color:var(--ink);
+    font-size:12px;width:100%;font-family:inherit;}
+  .cl-group{font-size:10.5px;color:var(--faint);padding:10px 16px 4px;
+    text-transform:uppercase;letter-spacing:1px;font-family:var(--mono);}
   .convo{display:flex;gap:11px;padding:11px 14px;cursor:pointer;border-left:3px solid transparent;}
-  .convo:hover{background:#f7f7f9;}
-  .convo.active{background:#eef0f6;border-left-color:var(--brand);}
-  .convo-avatar{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#1a1759,#4b3fe3);
-    color:#fff;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;flex:none;}
+  .convo:hover{background:rgba(255,255,255,.03);}
+  .convo.active{background:var(--brand-soft);border-left-color:var(--brand);}
+  .convo-avatar{width:40px;height:40px;border-radius:10px;background:#232830;
+    color:var(--brand);display:flex;align-items:center;justify-content:center;
+    font-size:15px;font-weight:700;flex:none;border:1px solid var(--line);}
   .convo-info{flex:1;min-width:0;}
   .convo-name{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:6px;}
-  .convo-name .cnt{font-size:10.5px;font-weight:400;color:var(--muted);}
+  .convo-name .cnt{font-family:var(--mono);font-size:10.5px;font-weight:400;color:var(--faint);}
   .convo-last{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;
     white-space:nowrap;margin-top:3px;}
-  .convo-time{font-family:var(--mono);font-size:10px;color:#c4c4cc;flex:none;}
-  .cl-footer{padding:10px 12px;border-top:1px solid var(--line);display:flex;gap:8px;}
+  .convo-time{font-family:var(--mono);font-size:10px;color:var(--faint);flex:none;}
+  .cl-footer{padding:10px 12px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:8px;}
   .cl-footer .btn{flex:1;}
 
-  /* ===== 右侧：聊天窗（微信式） ===== */
+  /* ===== 中部：聊天窗 ===== */
   #chat-view{flex:1;display:flex;flex-direction:column;min-width:0;}
-  .topbar{height:52px;background:var(--card);border-bottom:1px solid var(--line);
+  .topbar{height:52px;background:var(--panel);border-bottom:1px solid var(--line);
     display:flex;align-items:center;gap:12px;padding:0 16px;flex:none;}
   .room-name{font-size:15px;font-weight:600;}
-  .chip{font-family:var(--mono);font-size:11px;padding:3px 11px;border-radius:999px;background:var(--bg);color:var(--muted);
-    border:1px solid var(--line);}
-  .chip.warn{color:var(--warn);background:#fef6ec;border-color:#fde4c3;}
-  .chip.live{color:#047857;border-color:#a7f3d0;background:#ecfdf5;}
+  .chip{font-family:var(--mono);font-size:11px;padding:3px 11px;border-radius:999px;
+    background:var(--card);color:var(--muted);border:1px solid var(--line);}
+  .chip.warn{color:var(--warn);background:rgba(232,179,57,.1);border-color:rgba(232,179,57,.35);}
+  .chip.live{color:var(--accent);border-color:rgba(62,207,178,.35);background:rgba(62,207,178,.08);}
   .chip.live::first-letter{animation:breath 2.4s ease-in-out infinite;}
   @keyframes breath{0%,100%{opacity:1}50%{opacity:.35}}
   .spacer{flex:1;}
   .icon-btn{border:none;background:none;font-size:15px;cursor:pointer;padding:5px 9px;border-radius:8px;
-    color:#5c5c66;font-family:inherit;line-height:1;}
-  .icon-btn:hover{background:#f0f0f3;}
-  .icon-btn.on{background:var(--brand-soft);color:var(--brand-ink);}
-  .icon-btn.danger:hover{background:#fef3f2;color:var(--danger);}
+    color:var(--muted);font-family:inherit;line-height:1;}
+  .icon-btn:hover{background:var(--card-2);color:var(--ink);}
+  .icon-btn.on{background:var(--brand-soft);color:var(--brand-strong);}
+  .icon-btn.danger:hover{background:rgba(239,106,94,.12);color:var(--danger);}
 
   .feed{flex:1;overflow-y:auto;padding:20px 26px;display:flex;flex-direction:column;gap:14px;
-    position:relative;background:var(--bg);}
-  /* 点击波纹（.fx 目标） */
-  .fx{position:relative;overflow:hidden;}
-  .ripple{position:absolute;border-radius:50%;background:currentColor;opacity:.18;
+    position:relative;
+    background:radial-gradient(1100px 320px at 50% -90px,rgba(240,166,60,.055),transparent 62%),var(--bg);}
+  /* 点击波纹（.fx 目标）；flex-shrink:0 —— .fx 的 overflow:hidden 会让 flex 子项失去
+     min-height:auto 内容下限，在长消息流里被 flex 挤压成一条（气泡点一下就塌），必须禁止收缩 */
+  .fx{position:relative;overflow:hidden;flex-shrink:0;}
+  .ripple{position:absolute;border-radius:50%;background:currentColor;opacity:.16;
     transform:scale(0);animation:ripple .45s ease-out forwards;pointer-events:none;}
   @keyframes ripple{to{transform:scale(2.6);opacity:0;}}
   /* 气泡透明度（外观面板可调） */
-  .msg.human{background:rgba(149,236,105,var(--bub-a,1));}
-  .msg.agent,.msg.orch{background:rgba(255,255,255,var(--bub-a,1));}
+  .msg.human{background:rgba(240,166,60,calc(var(--bub-a,1)*.16));}
+  .msg.agent,.msg.orch{background:rgba(25,29,35,var(--bub-a,1));}
   .msg{max-width:66%;padding:9px 13px;border-radius:13px;font-size:13.5px;line-height:1.65;
-    position:relative;box-shadow:0 1px 2px rgba(0,0,0,.05);word-break:break-word;
+    position:relative;word-break:break-word;
     animation:msg-in .15s ease-out;}
   @keyframes msg-in{from{opacity:0;transform:translateY(6px);}}
-  /* 长气泡折叠/展开 */
-  .msg.folded .body{max-height:240px;overflow:hidden;
-    -webkit-mask-image:linear-gradient(#000 75%,transparent);mask-image:linear-gradient(#000 75%,transparent);}
-  .msg.expanded .body{max-height:none;}
-  .fold-tip{font-size:10.5px;color:var(--brand-ink);background:var(--brand-soft);
-    border-radius:999px;padding:2px 10px;display:inline-block;margin-top:5px;cursor:pointer;}
-  .fold-tip:hover{background:#e8e5ff;}
+  /* 消息序号 + 星标/删除 hover 操作 */
+  .msg .who .msg-no{margin-left:auto;color:var(--faint);font-family:var(--mono);font-size:10px;flex:none;}
+  .msg.human .who .msg-no{margin-left:auto;}               /* human 的 who 右对齐，序号天然靠右 */
+  .msg .msg-ops{display:none;gap:4px;margin-left:6px;flex:none;}
+  .msg:hover .msg-ops{display:flex;align-items:center;}
+  .msg-ops button{border:none;background:none;cursor:pointer;padding:0 2px;font-size:12px;
+    line-height:1;color:var(--faint);border-radius:4px;}
+  .msg-ops button:hover{color:var(--brand-strong);background:var(--brand-soft);}
+  .msg-ops button.del-btn:hover{color:var(--danger);background:rgba(239,106,94,.12);}
+  .msg.starred{border-color:var(--brand) !important;box-shadow:0 0 0 1px rgba(240,166,60,.25);}
+  .msg .star-mark{color:var(--brand-strong);font-size:10px;flex:none;}
+  /* 跳转定位高亮闪烁 */
+  @keyframes jump-flash{0%,100%{box-shadow:0 0 0 2px rgba(240,166,60,.9);}
+    50%{box-shadow:0 0 0 2px rgba(240,166,60,.15);}}
+  .msg.jump-flash{animation:jump-flash 1s ease-in-out 2;}
   .msg .who-dot{width:7px;height:7px;border-radius:50%;flex:none;
-    background:hsl(var(--h,240) 70% 45%);box-shadow:0 0 0 2px hsl(var(--h,240) 70% 45% /.18);}
+    background:hsl(var(--h,240) 62% 62%);box-shadow:0 0 0 2px hsl(var(--h,240) 62% 62% /.2);}
   .msg .body{white-space:pre-wrap;}
   /* 幽灵面板：流式生成中（虚线框 + 呼吸头像），终态落成正式气泡 */
-  .msg.ghost{border:1px dashed #c7c2f0;background:#fbfbfe;box-shadow:none;}
+  .msg.ghost{border:1px dashed rgba(62,207,178,.45);background:rgba(62,207,178,.05);box-shadow:none;}
   .msg.ghost .who-dot{animation:breath 1.6s ease-in-out infinite;}
-  .ghost-lbl{background:#ecfdf5;color:#047857;}
-  .msg.human{align-self:flex-end;background:#95ec69;color:var(--ink);border-bottom-right-radius:4px;}
-  .msg.agent{align-self:flex-start;background:var(--card);border:1px solid #ececf1;border-bottom-left-radius:4px;}
-  .msg.system{align-self:center;background:#f0f0f3;color:#8a8a94;font-size:12px;border-radius:999px;
-    padding:5px 16px;box-shadow:none;text-align:center;}
-  .msg .who{font-size:11px;opacity:.75;margin-bottom:2px;display:flex;gap:6px;align-items:center;}
+  .ghost-lbl{background:rgba(62,207,178,.14);color:var(--accent);}
+  .msg.human{align-self:flex-end;border:1px solid rgba(240,166,60,.32);
+    border-bottom-right-radius:4px;}
+  .msg.agent{align-self:flex-start;background:var(--card);border:1px solid var(--line);
+    border-bottom-left-radius:4px;}
+  .msg.system{align-self:center;background:var(--card-2);color:var(--muted);font-size:12px;border-radius:999px;
+    padding:5px 16px;border:none;box-shadow:none;text-align:center;}
+  .msg.orch{border-color:rgba(62,207,178,.3);}
+  .msg .who{font-size:11px;opacity:.8;margin-bottom:2px;display:flex;gap:6px;align-items:center;}
   .msg.human .who{justify-content:flex-end;}
-  .lbl{font-size:9.5px;padding:0 6px;border-radius:999px;background:rgba(0,0,0,.12);}
-  .msg.agent .lbl{background:var(--brand-soft);color:var(--brand-ink);}
+  .msg.human .who-dot{background:var(--brand);box-shadow:0 0 0 2px rgba(240,166,60,.2);}
+  .lbl{font-size:9.5px;padding:0 6px;border-radius:999px;background:rgba(255,255,255,.1);color:var(--muted);}
+  .msg.agent .lbl{background:var(--brand-soft);color:var(--brand-strong);}
   .typing{font-size:11px;color:var(--muted);align-self:flex-start;padding:2px 6px;display:none;}
   .typing.on{display:block;}
   .typing::after{content:"⋯";letter-spacing:2px;animation:breath 1.2s ease-in-out infinite;}
 
-  /* 输入区（微信式：无边框输入 + 绿色发送） */
-  .composer{border-top:1px solid var(--line);background:var(--card);padding:8px 16px 12px;
+  /* 输入区 */
+  .composer{border-top:1px solid var(--line);background:var(--panel);padding:8px 16px 12px;
     position:relative;flex:none;}
   #draft{width:100%;border:none;resize:none;font-size:14px;font-family:inherit;background:transparent;
-    height:58px;padding:6px 2px 0;line-height:1.6;}
+    color:var(--ink);height:58px;padding:6px 2px 0;line-height:1.6;}
+  #draft::placeholder{color:var(--faint);}
   #draft:focus{outline:none;}
   .composer .row{display:flex;align-items:center;gap:10px;padding-top:4px;}
-  .composer .tip{font-size:11px;color:var(--muted);}
-  .send{background:var(--wx-green);color:#fff;border:none;border-radius:8px;padding:8px 26px;
-    font-size:13.5px;cursor:pointer;font-family:inherit;font-weight:600;}
-  .send:hover{filter:brightness(1.06);transform:translateY(-1px);box-shadow:0 3px 10px rgba(7,193,96,.35);}
+  .composer .tip{font-size:11px;color:var(--faint);}
+  .send{background:var(--brand);color:var(--brand-ink);border:none;border-radius:8px;padding:8px 26px;
+    font-size:13.5px;cursor:pointer;font-family:inherit;font-weight:700;letter-spacing:2px;}
+  .send:hover{filter:brightness(1.08);transform:translateY(-1px);box-shadow:0 3px 12px rgba(240,166,60,.3);}
   .send:active{transform:translateY(0);box-shadow:none;}
 
   /* @提及弹出层 */
-  .mention-pop{position:absolute;bottom:100%;left:16px;right:16px;background:#fff;
-    border:1px solid var(--line);border-radius:10px;box-shadow:0 -6px 22px rgba(27,27,31,.12);
+  .mention-pop{position:absolute;bottom:100%;left:16px;right:16px;background:var(--card-2);
+    border:1px solid var(--line-2);border-radius:10px;box-shadow:0 -6px 24px rgba(0,0,0,.5);
     display:none;z-index:20;overflow:hidden;}
   .mention-pop .mp-item{padding:8px 14px;font-size:13px;cursor:pointer;display:flex;align-items:center;gap:8px;}
   .mention-pop .mp-item:hover,.mention-pop .mp-item.on{background:var(--brand-soft);}
-  .mention-pop .mp-item.all{border-bottom:1px dashed var(--line);color:var(--brand-ink);font-weight:600;}
+  .mention-pop .mp-item.all{border-bottom:1px dashed var(--line);color:var(--brand-strong);font-weight:600;}
 
-  /* ===== 右侧内嵌面板（文件/任务/成员/身份卡/模型/记忆） ===== */
-  #right-panel{width:402px;background:var(--card);border-left:1px solid var(--line);
-    display:flex;flex-direction:column;flex:none;min-width:0;}
+  /* ===== 右侧面板：竖向图标栏 + 面板体 ===== */
+  #right-panel{width:402px;background:var(--panel);border-left:1px solid var(--line);
+    display:flex;flex-direction:row;flex:none;min-width:0;}
   #right-panel.closed{display:none;}
-  .rp-tabs{display:flex;border-bottom:1px solid var(--line);padding:0 8px;flex:none;overflow-x:auto;}
-  .rp-tab{padding:10px 12px;font-size:12px;color:var(--muted);cursor:pointer;
-    border-bottom:2px solid transparent;white-space:nowrap;user-select:none;}
-  .rp-tab.on{color:var(--brand-ink);border-bottom-color:var(--brand);font-weight:600;}
+  .rp-tabs{display:flex;flex-direction:column;width:56px;flex:none;
+    background:#111418;border-right:1px solid var(--line);padding:8px 0;gap:2px;overflow-y:auto;}
+  .rp-tab{display:flex;flex-direction:column;align-items:center;gap:3px;
+    padding:9px 0;font-size:10px;color:var(--muted);cursor:pointer;
+    border-left:2px solid transparent;user-select:none;white-space:nowrap;}
+  .rp-tab .tab-ico{font-size:16px;line-height:1;}
+  .rp-tab .tab-txt{font-size:10px;line-height:1.2;}
+  .rp-tab:hover{color:var(--ink);background:rgba(255,255,255,.03);}
+  .rp-tab.on{color:var(--brand-strong);border-left-color:var(--brand);background:var(--brand-soft);}
+  .rp-stage{flex:1;display:flex;flex-direction:column;min-width:0;}
   .rp-body{flex:1;overflow-y:auto;padding:14px 16px;font-size:12.5px;color:var(--muted);display:none;}
   .rp-body.on{display:block;}
-  .grp{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 6px;}
+  .grp{font-size:10.5px;color:var(--faint);text-transform:uppercase;letter-spacing:.8px;
+    margin:14px 0 6px;font-family:var(--mono);}
   .grp:first-child{margin-top:0;}
   .member{display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:9px;font-size:13.5px;}
-  .member:hover{background:var(--bg);}
-  .avatar{width:28px;height:28px;border-radius:50%;background:var(--brand-soft);color:var(--brand-ink);
-    box-shadow:0 0 0 2px hsl(var(--h,240) 70% 45% /.8);
+  .member:hover{background:var(--card-2);}
+  .avatar{width:28px;height:28px;border-radius:50%;background:#232830;color:var(--ink);
+    box-shadow:0 0 0 2px hsl(var(--h,240) 62% 62% /.75);
     display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex:none;}
   .badge{font-size:10.5px;padding:1px 8px;border-radius:999px;background:var(--brand-soft);
-    color:var(--brand-ink);margin-left:auto;}
+    color:var(--brand-strong);margin-left:auto;}
   label.f{display:block;font-size:12.5px;color:var(--muted);margin:10px 0 4px;}
   input[type=text],input[type=password],select{width:100%;padding:8px 10px;border:1px solid var(--line);
-    border-radius:8px;font-size:13px;font-family:inherit;background:#fafafc;}
-  input:focus,select:focus{outline:2px solid var(--brand-soft);border-color:var(--brand);}
+    border-radius:8px;font-size:13px;font-family:inherit;background:var(--card);color:var(--ink);}
+  input::placeholder,textarea::placeholder{color:var(--faint);}
+  input:focus,select:focus{outline:2px solid rgba(240,166,60,.25);border-color:var(--brand);}
+  select option{background:var(--card);color:var(--ink);}
   .btn{display:inline-block;border:none;border-radius:9px;padding:9px 16px;font-size:13px;
     cursor:pointer;font-family:inherit;font-weight:500;text-align:center;}
-  .btn.primary{background:var(--brand);color:#fff;width:100%;margin-top:12px;}
+  .btn.primary{background:var(--brand);color:var(--brand-ink);font-weight:600;width:100%;margin-top:12px;}
   .btn.primary:hover{filter:brightness(1.08);}
-  .btn.ghost{background:var(--bg);color:var(--muted);}
-  .btn.danger-full{background:#fef3f2;color:var(--danger);border:1px solid #fecaca;width:100%;margin-top:10px;}
+  .btn.ghost{background:var(--card-2);color:var(--muted);border:1px solid var(--line);}
+  .btn.ghost:hover{color:var(--ink);border-color:var(--line-2);}
+  .btn.danger-full{background:rgba(239,106,94,.1);color:var(--danger);border:1px solid rgba(239,106,94,.35);
+    width:100%;margin-top:10px;}
+  .btn.danger-full:hover{background:rgba(239,106,94,.18);}
   .btn.sm{width:auto;padding:6px 12px;font-size:12px;margin:0;}
-  .hint{font-size:12px;color:var(--muted);margin-top:8px;line-height:1.6;}
-  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#d1d5db;margin-right:5px;}
-  .dot.ok{background:#10b981;} .dot.no{background:#ef4444;}
+  .hint{font-size:12px;color:var(--faint);margin-top:8px;line-height:1.6;}
+  .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--line-2);margin-right:5px;}
+  .dot.ok{background:var(--ok);} .dot.no{background:var(--danger);}
 
   /* 身份卡编辑器 */
   .tool-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin-top:6px;}
   .tool-grid label{font-size:12px;color:var(--ink);display:flex;align-items:center;gap:6px;}
   .idcard{border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin-bottom:8px;
-    cursor:pointer;font-size:12.5px;background:#fafafc;display:flex;align-items:center;gap:8px;}
+    cursor:pointer;font-size:12.5px;background:var(--card);display:flex;align-items:center;gap:8px;}
   .idcard:hover{border-color:var(--brand);}
   .idcard.sel{border-color:var(--brand);background:var(--brand-soft);}
-  .idcard .cv{font-family:var(--mono);margin-left:auto;color:var(--muted);font-size:11px;}
+  .idcard .cv{font-family:var(--mono);margin-left:auto;color:var(--faint);font-size:11px;}
   input[type=range]{width:100%;accent-color:var(--brand);}
   .member select{margin-left:auto;border:1px solid var(--line);border-radius:7px;
-    font-size:11.5px;padding:3px 5px;background:#fff;max-width:110px;}
+    font-size:11.5px;padding:3px 5px;background:var(--card);color:var(--ink);max-width:110px;}
 
   /* 外部成员 */
   .kind-badge{font-size:9.5px;padding:0 6px;border-radius:999px;margin-left:4px;}
-  .kind-badge.internal{background:var(--brand-soft);color:var(--brand-ink);}
-  .kind-badge.external{background:#ecfdf5;color:#047857;}
-  .member .copy-tok{margin-left:auto;border:1px solid var(--line);background:#fff;border-radius:7px;
-    font-size:10.5px;padding:3px 8px;cursor:pointer;color:var(--muted);}
-  .member .copy-tok:hover{border-color:var(--brand);color:var(--brand-ink);}
+  .kind-badge.internal{background:var(--brand-soft);color:var(--brand-strong);}
+  .kind-badge.external{background:rgba(62,207,178,.14);color:var(--accent);}
+  .member .copy-tok{margin-left:auto;border:1px solid var(--line);background:transparent;border-radius:7px;
+    font-size:10.5px;padding:3px 8px;cursor:pointer;color:var(--muted);font-family:var(--mono);}
+  .member .copy-tok:hover{border-color:var(--brand);color:var(--brand-strong);}
   .member .copy-tok.tok2{margin-left:4px;}
-  .member .del-agent{border:1px solid var(--line);background:#fff;border-radius:7px;
-    font-size:10.5px;padding:3px 7px;cursor:pointer;color:#b42318;margin-left:4px;}
-  .member .del-agent:hover{border-color:#b42318;background:#fef2f2;}
+  .member .del-agent{border:1px solid var(--line);background:transparent;border-radius:7px;
+    font-size:10.5px;padding:3px 7px;cursor:pointer;color:var(--danger);margin-left:4px;}
+  .member .del-agent:hover{border-color:var(--danger);background:rgba(239,106,94,.1);}
 
-  /* 文件工作区（面板内上下布局：树上预览下） */
+  /* 文件工作区 */
   .files-wrap{display:flex;flex-direction:column;gap:10px;height:100%;}
   .files-left{display:flex;flex-direction:column;max-height:46%;min-height:140px;}
   .files-right{flex:1;display:flex;flex-direction:column;min-height:120px;}
   .files-head{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink);
     padding-bottom:6px;border-bottom:1px solid var(--line);margin-bottom:6px;flex:none;}
   .files-head .spacer{flex:1;}
-  .mini-btn{border:1px solid var(--line);background:#fff;border-radius:7px;font-size:11px;
+  .mini-btn{border:1px solid var(--line);background:transparent;border-radius:7px;font-size:11px;
     padding:3px 9px;cursor:pointer;color:var(--muted);font-family:inherit;}
-  .mini-btn:hover{border-color:var(--brand);color:var(--brand-ink);}
+  .mini-btn:hover{border-color:var(--brand);color:var(--brand-strong);}
   .file-tree{flex:1;overflow-y:auto;}
   .file-row{display:flex;align-items:center;gap:8px;padding:4px 6px;border-radius:7px;font-size:12.5px;}
-  .file-row:hover{background:var(--bg);}
+  .file-row:hover{background:var(--card-2);}
   .file-name{cursor:pointer;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .file-name:hover{color:var(--brand-ink);text-decoration:underline;}
-  .file-dir{color:var(--muted);font-size:11px;}
-  .file-ver{font-family:var(--mono);flex:none;font-size:10.5px;background:var(--brand-soft);color:var(--brand-ink);
-    padding:0 7px;border-radius:999px;}
+  .file-name:hover{color:var(--brand-strong);text-decoration:underline;}
+  .file-dir{color:var(--faint);font-size:11px;}
+  .file-ver{font-family:var(--mono);flex:none;font-size:10.5px;background:var(--brand-soft);
+    color:var(--brand-strong);padding:0 7px;border-radius:999px;}
   .file-author{flex:none;font-size:10.5px;color:var(--muted);max-width:90px;overflow:hidden;
     text-overflow:ellipsis;white-space:nowrap;}
   .file-author.hum{color:var(--accent);}
-  .file-del{flex:none;border:none;background:none;color:#d1d5db;cursor:pointer;font-size:11px;
+  .file-del{flex:none;border:none;background:none;color:var(--faint);cursor:pointer;font-size:11px;
     padding:1px 4px;border-radius:5px;}
-  .file-del:hover{color:var(--danger);background:#fef3f2;}
+  .file-del:hover{color:var(--danger);background:rgba(239,106,94,.1);}
   #file-preview{flex:1;resize:none;border:1px solid var(--line);border-radius:9px;padding:9px 11px;
-    font-size:12px;font-family:Consolas,monospace;background:#fafafc;line-height:1.55;min-height:90px;}
-  #file-preview:focus{outline:2px solid var(--brand-soft);border-color:var(--brand);}
-  .msg.deliver{border-color:#a7f3d0;background:#f0fdf4;}
+    font-size:12px;font-family:var(--mono);background:var(--card);color:var(--ink);line-height:1.55;min-height:90px;}
+  #file-preview:focus{outline:2px solid rgba(240,166,60,.25);border-color:var(--brand);}
+  .msg.deliver{border-color:rgba(62,207,178,.3);background:rgba(62,207,178,.06);}
   .deliver-file{display:inline-flex;align-items:center;gap:4px;margin-top:5px;padding:3px 10px;
-    background:#fff;border:1px solid #a7f3d0;border-radius:8px;font-size:12px;cursor:pointer;
-    color:#047857;}
-  .deliver-file:hover{background:#ecfdf5;text-decoration:underline;}
-  .tool-note{font-family:var(--mono);margin-top:4px;font-size:10.5px;color:var(--muted);background:var(--bg);
-    border-radius:6px;padding:1px 8px;display:inline-block;}
-  /* 第 5 步：任务面板 + 记忆面板 */
+    background:transparent;border:1px solid rgba(62,207,178,.4);border-radius:8px;font-size:12px;cursor:pointer;
+    color:var(--accent);}
+  .deliver-file:hover{background:rgba(62,207,178,.1);text-decoration:underline;}
+  .tool-note{font-family:var(--mono);margin-top:4px;font-size:10.5px;color:var(--muted);background:var(--panel);
+    border:1px solid var(--line);border-radius:6px;padding:1px 8px;display:inline-block;}
+  /* 任务面板 + 记忆面板 */
   .task-card{border:1px solid var(--line);border-radius:10px;padding:9px 11px;margin-bottom:8px;
     background:var(--card);font-size:12.5px;}
-  .task-goal{font-weight:600;margin-bottom:4px;}
+  .task-goal{font-weight:600;margin-bottom:4px;color:var(--ink);}
   .task-status{color:var(--muted);font-size:11.5px;margin-bottom:6px;}
-  .subtask{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;}
+  .subtask{display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;color:var(--ink);}
   .st-chip{font-family:var(--mono);display:inline-block;min-width:44px;text-align:center;border-radius:999px;
-    font-size:10.5px;padding:1px 8px;background:var(--bg);color:var(--muted);}
-  .st-chip.st-dispatched{background:#fef9c3;color:#a16207;}
-  .st-chip.st-accepted{background:#dcfce7;color:#15803d;}
-  .st-chip.st-rejected{background:#fee2e2;color:#b91c1c;}
-  .st-chip.st-pending{background:var(--bg);color:var(--muted);}
+    font-size:10.5px;padding:1px 8px;background:var(--card-2);color:var(--muted);}
+  .st-chip.st-dispatched{background:rgba(232,179,57,.14);color:var(--warn);}
+  .st-chip.st-accepted{background:rgba(76,195,138,.14);color:var(--ok);}
+  .st-chip.st-rejected{background:rgba(239,106,94,.14);color:var(--danger);}
+  .st-chip.st-pending{background:var(--card-2);color:var(--muted);}
   .task-actions{margin-top:6px;display:flex;gap:6px;}
-  .sub-detail{font-size:11px;color:var(--muted);margin:2px 0 0 50px;line-height:1.5;
+  .sub-detail{font-size:11px;color:var(--faint);margin:2px 0 0 50px;line-height:1.5;
     overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
-  .mem-item{border-left:3px solid var(--brand-soft);padding:4px 8px;margin-bottom:6px;
-    font-size:12px;background:var(--card);border-radius:0 8px 8px 0;}
-  .mem-item .mem-meta{color:var(--muted);font-size:10.5px;margin-top:2px;}
-  .msg.orch{border-color:#ddd6fe;background:#faf9ff;}
+  .mem-item{border-left:3px solid rgba(240,166,60,.55);padding:4px 8px;margin-bottom:6px;
+    font-size:12px;background:var(--card);border-radius:0 8px 8px 0;color:var(--ink);}
+  .mem-item .mem-meta{color:var(--faint);font-size:10.5px;margin-top:2px;font-family:var(--mono);}
   /* 帮助面板 */
   .help-item{font-size:12px;line-height:1.7;color:var(--ink);background:var(--card);
     border:1px solid var(--line);border-radius:9px;padding:8px 11px;margin-bottom:7px;}
-  .help-item code{background:var(--bg);border:1px solid var(--line);border-radius:5px;
-    padding:0 5px;font-size:11px;color:var(--brand-ink);}
-  .help-item b{color:var(--brand-ink);}
+  .help-item code{background:var(--panel);border:1px solid var(--line);border-radius:5px;
+    padding:0 5px;font-size:11px;color:var(--brand-strong);font-family:var(--mono);}
+  .help-item b{color:var(--brand-strong);}
 
-  /* 弹窗（添加外部成员） */
-  .modal-mask{position:fixed;inset:0;background:rgba(27,27,31,.35);display:none;
-    align-items:center;justify-content:center;z-index:50;}
+  /* 弹窗 */
+  .modal-mask{position:fixed;inset:0;background:rgba(6,8,10,.65);backdrop-filter:blur(4px);
+    display:none;align-items:center;justify-content:center;z-index:50;}
   .modal-mask.on{display:flex;}
-  .modal{width:420px;background:#fff;border-radius:14px;padding:20px 22px;box-shadow:0 18px 50px rgba(0,0,0,.22);}
-  .modal h3{font-size:15px;margin-bottom:12px;}
-  .modal .token-box{background:#0f172a;color:#a5f3fc;font-family:Consolas,monospace;font-size:12.5px;
-    border-radius:9px;padding:10px 12px;word-break:break-all;margin:8px 0;}
-  .modal textarea{width:100%;height:84px;background:#0f172a;color:#a5f3fc;font-family:Consolas,monospace;
-    font-size:11px;border:none;border-radius:9px;padding:8px 10px;resize:none;margin-top:6px;}
+  .modal{width:420px;background:var(--card);border:1px solid var(--line-2);border-radius:14px;
+    padding:20px 22px;box-shadow:0 18px 50px rgba(0,0,0,.6);}
+  .modal h3{font-size:15px;margin-bottom:12px;color:var(--ink);}
+  .modal .token-box{background:#0b0d10;color:#f5b95e;font-family:var(--mono);font-size:12.5px;
+    border:1px solid var(--line);border-radius:9px;padding:10px 12px;word-break:break-all;margin:8px 0;}
+  .modal textarea{width:100%;height:84px;background:#0b0d10;color:#f5b95e;font-family:var(--mono);
+    font-size:11px;border:1px solid var(--line);border-radius:9px;padding:8px 10px;resize:none;margin-top:6px;}
   .modal .btn{margin-top:10px;}
   .modal label.f{margin-top:8px;}
 </style>
@@ -267,197 +305,198 @@
   <aside id="chat-list">
     <div class="cl-head">
       <div class="logo">AR</div>
-      <h1>Agent Room<small>多Agent群聊协作 · 本机运行</small></h1>
+      <h1>Agent Room<small data-i18n="brand.sub">多Agent群聊协作 · 本机运行</small></h1>
     </div>
-    <div class="cl-search">🔍 搜索会话（MVP 占位）</div>
-    <div class="cl-group">会话</div>
+    <div class="cl-search"><input type="text" id="jump-input" placeholder="🔍 #37 跳转到消息" data-i18n-ph="search.placeholder"></div>
+    <div class="cl-group" data-i18n="group.sessions">会话</div>
     <div id="room-list"></div>
     <div class="cl-footer">
-      <button class="btn primary sm" id="btn-new-room" style="margin-bottom:6px;width:100%;">＋ 新建群聊</button>
-      <button class="btn ghost sm" id="btn-add-external" style="width:100%;">＋ 添加外部成员</button>
+      <button class="btn primary sm" id="btn-new-room" data-i18n="btn.newRoom">＋ 新建群聊</button>
+      <button class="btn ghost sm" id="btn-add-external" data-i18n="btn.addExternal">＋ 添加外部成员</button>
     </div>
   </aside>
 
-  <!-- 右侧：聊天窗 -->
+  <!-- 中部：聊天窗 -->
   <main id="chat-view">
     <div class="topbar">
       <span class="room-name" id="room-name">主房间</span>
       <span class="chip" id="ws-chip">● 连接中…</span>
       <span class="chip" id="llm-chip">LLM 未配置</span>
       <span class="spacer"></span>
-      <button class="icon-btn" id="btn-panel-files" title="文件工作区">📁</button>
-      <button class="icon-btn" id="btn-panel-members" title="成员管理">👥</button>
-      <button class="icon-btn" id="btn-panel-settings" title="身份卡与模型设置">⚙️</button>
-      <button class="icon-btn" id="btn-panel-help" title="使用说明">❓</button>
-      <button class="icon-btn danger" id="btn-stop-all" title="停止全部（P0 interrupt）">⏹</button>
+      <button class="icon-btn" id="btn-panel-files" title="文件工作区" data-i18n-title="title.files">📁</button>
+      <button class="icon-btn" id="btn-panel-members" title="成员管理" data-i18n-title="title.members">👥</button>
+      <button class="icon-btn" id="btn-panel-settings" title="身份卡与模型设置" data-i18n-title="title.settings">⚙️</button>
+      <button class="icon-btn" id="btn-panel-help" title="使用说明" data-i18n-title="title.help">❓</button>
+      <button class="icon-btn danger" id="btn-stop-all" title="停止全部（P0 interrupt）" data-i18n-title="title.stopAll">⏹</button>
     </div>
     <div class="feed" id="feed"></div>
     <div class="typing" id="typing">Agent A 正在输入…</div>
     <div class="composer">
-      <textarea id="draft" placeholder="输入消息，Enter 发送；输入 @ 弹出成员选择…"></textarea>
+      <textarea id="draft" placeholder="输入消息，Enter 发送；输入 @ 弹出成员选择…" data-i18n-ph="ph.draft"></textarea>
       <div id="mention-pop" class="mention-pop"></div>
       <div id="refs-pop" class="mention-pop" style="display:none;max-height:260px;overflow-y:auto;min-width:260px;"></div>
       <div class="row">
-        <button class="icon-btn" id="btn-refs" title="引用工作区文件" style="padding:3px 8px;">📎</button>
+        <button class="icon-btn" id="btn-refs" title="引用工作区文件" data-i18n-title="title.refs" style="padding:3px 8px;">📎</button>
         <span class="tip" id="scope-tip">广播模式：全体 Agent 可见可回</span>
         <span class="spacer"></span>
-        <button class="send" id="btn-send">发 送</button>
+        <button class="send" id="btn-send" data-i18n="btn.send">发 送</button>
       </div>
     </div>
   </main>
 
-  <!-- 右侧内嵌面板：文件 / 任务 / 成员 / 身份卡 / 模型 / 记忆 -->
+  <!-- 右侧面板：竖向图标栏 + 面板体 -->
   <aside id="right-panel" class="closed">
-    <div class="rp-tabs">
-      <div class="rp-tab on" data-rp="rp-files">文件</div>
-      <div class="rp-tab" data-rp="rp-task">任务</div>
-      <div class="rp-tab" data-rp="rp-members">成员</div>
-      <div class="rp-tab" data-rp="rp-identity">身份卡</div>
-      <div class="rp-tab" data-rp="rp-model">模型</div>
-      <div class="rp-tab" data-rp="rp-memory">记忆</div>
-      <div class="rp-tab" data-rp="rp-appearance">外观</div>
-      <div class="rp-tab" data-rp="rp-skills">技能</div>
-      <div class="rp-tab" data-rp="rp-help">帮助</div>
-    </div>
+    <nav class="rp-tabs">
+      <div class="rp-tab on" data-rp="rp-files"><span class="tab-ico">📁</span><span class="tab-txt" data-i18n="tab.files">文件</span></div>
+      <div class="rp-tab" data-rp="rp-task"><span class="tab-ico">📋</span><span class="tab-txt" data-i18n="tab.task">任务</span></div>
+      <div class="rp-tab" data-rp="rp-members"><span class="tab-ico">👥</span><span class="tab-txt" data-i18n="tab.members">成员</span></div>
+      <div class="rp-tab" data-rp="rp-identity"><span class="tab-ico">🪪</span><span class="tab-txt" data-i18n="tab.identity">身份卡</span></div>
+      <div class="rp-tab" data-rp="rp-model"><span class="tab-ico">🤖</span><span class="tab-txt" data-i18n="tab.model">模型</span></div>
+      <div class="rp-tab" data-rp="rp-memory"><span class="tab-ico">🧠</span><span class="tab-txt" data-i18n="tab.memory">记忆</span></div>
+      <div class="rp-tab" data-rp="rp-appearance"><span class="tab-ico">🎨</span><span class="tab-txt" data-i18n="tab.appearance">外观</span></div>
+      <div class="rp-tab" data-rp="rp-skills"><span class="tab-ico">🧩</span><span class="tab-txt" data-i18n="tab.skills">技能</span></div>
+      <div class="rp-tab" data-rp="rp-help"><span class="tab-ico">❓</span><span class="tab-txt" data-i18n="tab.help">帮助</span></div>
+    </nav>
+    <div class="rp-stage">
 
     <div class="rp-body on" id="rp-files">
       <div class="files-wrap">
         <div class="files-left">
           <div class="files-head">
-            <span>文件工作区 · <b id="file-count">0</b></span>
+            <span><span data-i18n="files.workspace">文件工作区</span> · <b id="file-count">0</b></span>
             <span class="spacer"></span>
-            <button class="mini-btn" id="btn-upload">⬆ 上传</button>
+            <button class="mini-btn" id="btn-upload" data-i18n="btn.upload">⬆ 上传</button>
             <input type="file" id="file-input" style="display:none;">
           </div>
           <div id="file-tree" class="file-tree"></div>
         </div>
         <div class="files-right">
           <div class="files-head">
-            <span id="file-preview-head">点文件名预览</span>
+            <span id="file-preview-head" data-i18n="files.previewHint">点文件名预览</span>
             <span class="spacer"></span>
-            <button class="mini-btn" id="btn-save-preview">💾 保存</button>
+            <button class="mini-btn" id="btn-save-preview" data-i18n="btn.savePreview">💾 保存</button>
           </div>
-          <textarea id="file-preview" placeholder="文件内容预览与编辑（保存走乐观锁，冲突会提示刷新）"></textarea>
+          <textarea id="file-preview" placeholder="文件内容预览与编辑（保存走乐观锁，冲突会提示刷新）" data-i18n-ph="ph.filePreview"></textarea>
         </div>
       </div>
     </div>
 
     <div class="rp-body" id="rp-task">
-      <div class="grp">任务 · CEO 编排闭环</div>
-      <label class="f">任务目标（CEO 拆解为排产单，先给你确认）</label>
-      <textarea id="task-goal" rows="2" placeholder="如：调研竞品并输出对比报告" style="width:100%;"></textarea>
-      <button class="btn primary sm" id="btn-issue-task" style="margin-top:6px;">🎯 下达任务</button>
-      <div class="grp" style="margin-top:14px;">任务进度</div>
-      <div style="margin-bottom:6px;"><button class="mini-btn" id="btn-tasks-clear">🧹 清空已完成任务</button></div>
+      <div class="grp" data-i18n="grp.task">任务 · CEO 编排闭环</div>
+      <label class="f" data-i18n="lbl.taskGoal">任务目标（CEO 拆解为排产单，先给你确认）</label>
+      <textarea id="task-goal" rows="2" placeholder="如：调研竞品并输出对比报告" data-i18n-ph="ph.taskGoal" style="width:100%;"></textarea>
+      <button class="btn primary sm" id="btn-issue-task" data-i18n="btn.issueTask" style="margin-top:6px;">🎯 下达任务</button>
+      <div class="grp" style="margin-top:14px;" data-i18n="grp.taskProgress">任务进度</div>
+      <div style="margin-bottom:6px;"><button class="mini-btn" id="btn-tasks-clear" data-i18n="btn.tasksClear">🧹 清空已完成任务</button></div>
       <div id="task-list"></div>
-      <div class="hint">流程：下达 → CEO 拆解 → 你确认 → 按依赖派发排产单 → 交付 → 验收/打回 → 汇总沉淀记忆。互聊超限自动熔断 @你裁决。</div>
+      <div class="hint" data-i18n="hint.taskFlow">流程：下达 → CEO 拆解 → 你确认 → 按依赖派发排产单 → 交付 → 验收/打回 → 汇总沉淀记忆。互聊超限自动熔断 @你裁决。</div>
     </div>
 
     <div class="rp-body" id="rp-members">
-      <div class="grp">成员 · <span id="agent-count">0</span>（右侧下拉换绑身份卡）</div>
+      <div class="grp"><span data-i18n="grp.members">成员</span> · <span id="agent-count">0</span><span data-i18n="grp.membersSub">（右侧下拉换绑身份卡）</span></div>
       <div id="member-list"></div>
-      <button class="btn primary sm" id="btn-add-external2" style="margin-top:8px;">＋ 添加外部成员</button>
-      <div class="grp" style="margin-top:16px;">快捷操作</div>
-      <button class="btn primary sm" id="btn-archive-now" style="width:100%;margin-bottom:6px;">🧹 立即归档清理（Agent B 执行）</button>
-      <button class="btn danger-full" id="btn-stop-all2">■ 停止全部（P0 interrupt）</button>
-      <div class="hint">P0 生效会取消所有 Agent 正在进行的生成。互聊不设上限，聊天记录由 Agent B 定时总结归档清理。</div>
+      <button class="btn primary sm" id="btn-add-external2" data-i18n="btn.addExternal" style="margin-top:8px;">＋ 添加外部成员</button>
+      <div class="grp" style="margin-top:16px;" data-i18n="grp.quickOps">快捷操作</div>
+      <button class="btn primary sm" id="btn-archive-now" data-i18n="btn.archiveNow" style="width:100%;margin-bottom:6px;">🧹 立即归档清理（Agent B 执行）</button>
+      <button class="btn danger-full" id="btn-stop-all2" data-i18n="btn.stopAllFull">■ 停止全部（P0 interrupt）</button>
+      <div class="hint" data-i18n="hint.members">P0 生效会取消所有 Agent 正在进行的生成。互聊不设上限，聊天记录由 Agent B 定时总结归档清理。</div>
     </div>
 
     <div class="rp-body" id="rp-identity">
-      <div class="grp">身份卡列表</div>
+      <div class="grp" data-i18n="grp.identityList">身份卡列表</div>
       <div id="id-list"></div>
-      <button class="btn primary sm" id="btn-new-id" style="margin-top:6px;">＋ 新建身份卡</button>
-      <div class="grp" style="margin-top:18px;">编辑器</div>
-      <label class="f">显示标签 label</label>
-      <input type="text" id="id-label" placeholder="如：调研员">
-      <label class="f">风格 persona</label>
-      <input type="text" id="id-persona" placeholder="严谨、简洁、不懂就问">
-      <label class="f">职责 responsibilities（顿号分隔）</label>
-      <input type="text" id="id-resp" placeholder="检索资料、写调研笔记">
-      <div class="grp">工具白名单 tools_allow</div>
+      <button class="btn primary sm" id="btn-new-id" data-i18n="btn.newIdentity" style="margin-top:6px;">＋ 新建身份卡</button>
+      <div class="grp" style="margin-top:18px;" data-i18n="grp.editor">编辑器</div>
+      <label class="f" data-i18n="lbl.idLabel">显示标签 label</label>
+      <input type="text" id="id-label" placeholder="如：调研员" data-i18n-ph="ph.idLabel">
+      <label class="f" data-i18n="lbl.idPersona">风格 persona</label>
+      <input type="text" id="id-persona" placeholder="严谨、简洁、不懂就问" data-i18n-ph="ph.idPersona">
+      <label class="f" data-i18n="lbl.idResp">职责 responsibilities（顿号分隔）</label>
+      <input type="text" id="id-resp" placeholder="检索资料、写调研笔记" data-i18n-ph="ph.idResp">
+      <div class="grp" data-i18n="grp.tools">工具白名单 tools_allow</div>
       <div style="display:flex;gap:6px;margin-bottom:5px;">
-        <button class="mini-btn" id="btn-tools-rec">⚡ 一键：文件+技能</button>
-        <button class="mini-btn" id="btn-tools-clear">清空</button>
+        <button class="mini-btn" id="btn-tools-rec" data-i18n="btn.toolsRec">⚡ 一键：文件+技能</button>
+        <button class="mini-btn" id="btn-tools-clear" data-i18n="btn.clear">清空</button>
       </div>
       <div id="id-tools" class="tool-grid"></div>
       <div class="row" style="margin-top:10px;gap:8px;display:flex;">
-        <button class="btn primary sm" id="btn-save-id" style="margin-top:0;flex:1;">保存</button>
-        <button class="btn danger-full sm" id="btn-del-id" style="margin-top:0;flex:1;">删除</button>
+        <button class="btn primary sm" id="btn-save-id" data-i18n="btn.save" style="margin-top:0;flex:1;">保存</button>
+        <button class="btn danger-full sm" id="btn-del-id" data-i18n="btn.del" style="margin-top:0;flex:1;">删除</button>
       </div>
-      <div class="hint">互聊轮次自 5.5 步起不设上限（Agent B 定时归档清理聊天记录防存储膨胀）。保存后可在「成员」页为 Agent 换绑。</div>
+      <div class="hint" data-i18n="hint.identity">互聊轮次自 5.5 步起不设上限（Agent B 定时归档清理聊天记录防存储膨胀）。保存后可在「成员」页为 Agent 换绑。</div>
     </div>
 
     <div class="rp-body" id="rp-model">
-      <div class="grp">LLM · OpenAI 兼容端点</div>
+      <div class="grp" data-i18n="grp.model">LLM · OpenAI 兼容端点</div>
       <label class="f">Base URL</label>
-      <input type="text" id="llm-url" placeholder="https://api.example.com/v1">
+      <input type="text" id="llm-url" placeholder="https://api.example.com/v1" data-i18n-ph="ph.llmUrl">
       <label class="f">API Key</label>
-      <input type="password" id="llm-key" placeholder="sk-...">
-      <label class="f">模型名</label>
-      <input type="text" id="llm-model" placeholder="gpt-4o-mini / deepseek-chat …">
-      <button class="btn primary" id="btn-save-llm">保存并连接</button>
-      <div class="hint" id="llm-test-result">保存后会自动向端点发一条测试消息验证连通性。</div>
-      <div class="hint">配置保存后自动发一条测试消息校验连通性；配置存本机数据库（重启不丢，不出本机）；V2 迁移加密存储与多模型插槽。</div>
+      <input type="password" id="llm-key" placeholder="sk-..." data-i18n-ph="ph.llmKey">
+      <label class="f" data-i18n="lbl.modelName">模型名</label>
+      <input type="text" id="llm-model" placeholder="gpt-4o-mini / deepseek-chat …" data-i18n-ph="ph.llmModel">
+      <button class="btn primary" id="btn-save-llm" data-i18n="btn.saveLlm">保存并连接</button>
+      <div class="hint" id="llm-test-result" data-i18n="hint.modelTest">保存后会自动向端点发一条测试消息验证连通性。</div>
+      <div class="hint" data-i18n="hint.model">配置保存后自动发一条测试消息校验连通性；配置存本机数据库（重启不丢，不出本机）；V2 迁移加密存储与多模型插槽。</div>
     </div>
 
     <div class="rp-body" id="rp-memory">
-      <div class="grp">向量记忆 · 本地存储</div>
+      <div class="grp" data-i18n="grp.memory">向量记忆 · 本地存储</div>
       <div id="mem-stats" class="hint" style="margin-bottom:8px;"></div>
       <div id="mem-list"></div>
-      <button class="btn danger-full sm" id="btn-mem-clear" style="margin-top:8px;">🗑 清空公共记忆</button>
-      <div class="hint">公共记忆：任务验收通过后沉淀；私有记忆：Agent 交付时写入、仅本人可读。检索 top-k 自动注入 Agent 上下文并标注来源时间。闲聊不入库。每条记忆可单独删除，也可一键清空公共记忆。</div>
+      <button class="btn danger-full sm" id="btn-mem-clear" data-i18n="btn.memClear" style="margin-top:8px;">🗑 清空公共记忆</button>
+      <div class="hint" data-i18n="hint.memory">公共记忆：任务验收通过后沉淀；私有记忆：Agent 交付时写入、仅本人可读。检索 top-k 自动注入 Agent 上下文并标注来源时间。闲聊不入库。每条记忆可单独删除，也可一键清空公共记忆。</div>
     </div>
 
     <div class="rp-body" id="rp-appearance">
-      <div class="grp">语言 / Language</div>
+      <div class="grp" data-i18n="grp.lang">语言 / Language</div>
       <select id="lang-select" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
         <option value="zh">中文</option>
         <option value="en">English</option>
       </select>
-      <div class="grp" style="margin-top:12px;">聊天背景</div>
+      <div class="grp" style="margin-top:12px;" data-i18n="grp.bg">聊天背景</div>
       <div id="bg-presets" style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:10px;"></div>
-      <label class="f">自定义背景图（本地图片，存浏览器不外传）</label>
+      <label class="f" data-i18n="lbl.bgCustom">自定义背景图（本地图片，存浏览器不外传）</label>
       <div class="row" style="display:flex;gap:8px;">
-        <button class="btn primary sm" id="btn-bg-image" style="margin-top:0;flex:1;">🖼 选择图片</button>
+        <button class="btn primary sm" id="btn-bg-image" data-i18n="btn.bgImage" style="margin-top:0;flex:1;">🖼 选择图片</button>
         <input type="file" id="bg-file" accept="image/*" style="display:none;">
-        <button class="btn ghost sm" id="btn-bg-reset" style="margin-top:0;flex:1;">恢复默认</button>
+        <button class="btn ghost sm" id="btn-bg-reset" data-i18n="btn.bgReset" style="margin-top:0;flex:1;">恢复默认</button>
       </div>
-      <div class="grp" style="margin-top:14px;">透明度</div>
-      <label class="f">背景遮罩浓度（越高文字越清晰）：<b id="mask-v">0</b></label>
+      <div class="grp" style="margin-top:14px;" data-i18n="grp.opacity">透明度</div>
+      <label class="f"><span data-i18n="lbl.mask">背景遮罩浓度（越高文字越清晰）：</span><b id="mask-v">0</b></label>
       <input type="range" id="bg-mask" min="0" max="90" value="0">
-      <label class="f">气泡不透明度：<b id="bub-v">100</b>%</label>
+      <label class="f"><span data-i18n="lbl.bub">气泡不透明度：</span><b id="bub-v">100</b>%</label>
       <input type="range" id="bub-opacity" min="55" max="100" value="100">
-      <div class="grp" style="margin-top:14px;">动效</div>
+      <div class="grp" style="margin-top:14px;" data-i18n="grp.fx">动效</div>
       <label style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink);">
-        <input type="checkbox" id="fx-ripple" checked> 点击波纹与气泡弹跳
+        <input type="checkbox" id="fx-ripple" checked> <span data-i18n="lbl.ripple">点击波纹与气泡弹跳</span>
       </label>
-      <div class="hint" style="margin-top:10px;">设置保存在本浏览器（localStorage），每个浏览器独立；图片不离开本机。</div>
+      <div class="hint" style="margin-top:10px;" data-i18n="hint.appearance">设置保存在本浏览器（localStorage），每个浏览器独立；图片不离开本机。</div>
     </div>
 
     <div class="rp-body" id="rp-skills">
-      <div class="grp">内部技能库 · 供群里 Agent 使用</div>
-      <div class="hint" style="margin-bottom:8px;">技能 = 写法规范 / 模板 / 工作流（md 文档）。Agent 绑定含 skills.* 白名单的身份卡后，可在对话中自查技能并照做。</div>
+      <div class="grp" data-i18n="grp.skills">内部技能库 · 供群里 Agent 使用</div>
+      <div class="hint" style="margin-bottom:8px;" data-i18n="hint.skillsIntro">技能 = 写法规范 / 模板 / 工作流（md 文档）。Agent 绑定含 skills.* 白名单的身份卡后，可在对话中自查技能并照做。</div>
       <div id="skill-list"></div>
-      <div class="grp" style="margin-top:12px;">从本机技能库导入</div>
+      <div class="grp" style="margin-top:12px;" data-i18n="grp.skillsImport">从本机技能库导入</div>
       <div class="row" style="display:flex;gap:8px;">
         <select id="import-source" style="flex:1;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
-          <option value="zcode">ZCode 技能库（d:/ai-use/.zcode/skills）</option>
-          <option value="trae">TRAE 技能库（.trae-cn/skills）</option>
-          <option value="trae-builtin">TRAE 内置技能（.trae-cn/builtin_skills）</option>
+          <option value="zcode" data-i18n="skills.src.zcode">ZCode 技能库（d:/ai-use/.zcode/skills）</option>
+          <option value="trae" data-i18n="skills.src.trae">TRAE 技能库（.trae-cn/skills）</option>
+          <option value="trae-builtin" data-i18n="skills.src.builtin">TRAE 内置技能（.trae-cn/builtin_skills）</option>
         </select>
-        <button class="btn primary sm" id="btn-import-local" style="margin-top:0;">导入</button>
+        <button class="btn primary sm" id="btn-import-local" data-i18n="btn.import" style="margin-top:0;">导入</button>
       </div>
-      <div class="grp" style="margin-top:12px;">添加 / 更新技能</div>
-      <label class="f">技能名（文字/数字/连字符，可中文，如 周报模板）</label>
+      <div class="grp" style="margin-top:12px;" data-i18n="grp.skillsEdit">添加 / 更新技能</div>
+      <label class="f" data-i18n="lbl.skillName">技能名（文字/数字/连字符，可中文，如 周报模板）</label>
       <input type="text" id="skill-name" placeholder="weekly-report">
-      <label class="f">技能内容（Markdown：用途 / 工作流 / 模板 / 要求）</label>
-      <textarea id="skill-content" rows="8" placeholder="# 技能名&#10;&#10;用途：…&#10;## 工作流&#10;1. …&#10;## 模板&#10;…&#10;## 要求&#10;- …" style="width:100%;"></textarea>
+      <label class="f" data-i18n="lbl.skillContent">技能内容（Markdown：用途 / 工作流 / 模板 / 要求）</label>
+      <textarea id="skill-content" rows="8" placeholder="# 技能名&#10;&#10;用途：…&#10;## 工作流&#10;1. …&#10;## 模板&#10;…&#10;## 要求&#10;- …" data-i18n-ph="ph.skillContent" style="width:100%;"></textarea>
       <div class="row" style="display:flex;gap:8px;margin-top:6px;">
-        <button class="btn primary sm" id="btn-save-skill" style="margin-top:0;flex:1;">保存技能</button>
-        <button class="btn ghost sm" id="btn-import-skill" style="margin-top:0;flex:1;">📥 导入 .md 文件</button>
+        <button class="btn primary sm" id="btn-save-skill" data-i18n="btn.saveSkill" style="margin-top:0;flex:1;">保存技能</button>
+        <button class="btn ghost sm" id="btn-import-skill" data-i18n="btn.importMd" style="margin-top:0;flex:1;">📥 导入 .md 文件</button>
         <input type="file" id="skill-files" multiple accept=".md,.markdown,.txt" style="display:none;">
       </div>
-      <div class="hint">导入：可选多个 .md 文件，文件名即技能名（非法字符自动转换，同名覆盖）；列表中每个技能可导出为 .md 分享。</div>
+      <div class="hint" data-i18n="hint.skills">导入：可选多个 .md 文件，文件名即技能名（非法字符自动转换，同名覆盖）；列表中每个技能可导出为 .md 分享。</div>
     </div>
 
     <div class="rp-body" id="rp-help">
@@ -487,22 +526,23 @@
       <div class="grp" style="margin-top:14px;">🗺️ 路线图</div>
       <div class="hint">已完成：群聊协作 → 身份卡/提及/P0 → MCP 网关（外部进群）→ 文件工作区 + 微信式界面 → CEO 编排闭环 + 向量记忆 + 熔断。进行中：外部 Agent 承接排产单、网关二次权限校验、无人值守自动接活。</div>
     </div>
+    </div>
   </aside>
 </div>
 
 <!-- 新建群聊弹窗 -->
 <div class="modal-mask" id="room-modal-mask">
   <div class="modal">
-    <h3>新建群聊</h3>
-    <label class="f">群聊名称</label>
-    <input type="text" id="room-name-in" placeholder="如：项目攻坚群">
-    <label class="f">选择加入的成员（可多选）</label>
+    <h3 data-i18n="m.roomTitle">新建群聊</h3>
+    <label class="f" data-i18n="lbl.roomName">群聊名称</label>
+    <input type="text" id="room-name-in" placeholder="如：项目攻坚群" data-i18n-ph="ph.roomName">
+    <label class="f" data-i18n="lbl.roomPicks">选择加入的成员（可多选）</label>
     <div id="room-agent-picks" style="max-height:200px;overflow-y:auto;border:1px solid var(--line);border-radius:8px;padding:8px 10px;"></div>
     <div class="row" style="display:flex;gap:8px;margin-top:12px;">
-      <button class="btn primary" id="btn-room-create" style="margin-top:0;flex:1;">创建并进入</button>
-      <button class="btn ghost" id="btn-room-cancel" style="margin-top:0;flex:1;">取消</button>
+      <button class="btn primary" id="btn-room-create" data-i18n="btn.roomCreate" style="margin-top:0;flex:1;">创建并进入</button>
+      <button class="btn ghost" id="btn-room-cancel" data-i18n="btn.cancel" style="margin-top:0;flex:1;">取消</button>
     </div>
-    <div class="hint">文件工作区 / 任务 / 记忆按群聊独立隔离；外部成员被拉入后可用其网关工具传 room_id 在该群收发。</div>
+    <div class="hint" data-i18n="hint.roomModal">文件工作区 / 任务 / 记忆按群聊独立隔离；外部成员被拉入后可用其网关工具传 room_id 在该群收发。</div>
   </div>
 </div>
 
@@ -510,42 +550,42 @@
 <div class="modal-mask" id="modal-mask">
   <div class="modal">
     <div id="modal-form">
-      <h3>添加外部成员</h3>
-      <label class="f">成员名称（如：开发员·外部）</label>
-      <input type="text" id="ext-name" placeholder="开发员·外部">
-      <label class="f">绑定身份卡（可稍后换绑）</label>
+      <h3 data-i18n="m.extTitle">添加外部成员</h3>
+      <label class="f" data-i18n="lbl.extName">成员名称（如：开发员·外部）</label>
+      <input type="text" id="ext-name" placeholder="开发员·外部" data-i18n-ph="ph.extName">
+      <label class="f" data-i18n="lbl.extBind">绑定身份卡（可稍后换绑）</label>
       <select id="ext-identity" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;">
-        <option value="">— 暂不绑定 —</option>
+        <option value="" data-i18n="opt.noBind">— 暂不绑定 —</option>
       </select>
-      <button class="btn primary" id="btn-ext-create">创建并发放令牌</button>
-      <button class="btn ghost" id="btn-ext-cancel" style="width:100%;margin-top:8px;">取消</button>
+      <button class="btn primary" id="btn-ext-create" data-i18n="btn.extCreate">创建并发放令牌</button>
+      <button class="btn ghost" id="btn-ext-cancel" data-i18n="btn.cancel" style="width:100%;margin-top:8px;">取消</button>
     </div>
     <div id="modal-result" style="display:none;">
-      <h3>✅ 成员已创建 · 令牌仅显示这一次</h3>
-      <div class="hint">ROOM_TOKEN（重发将使旧令牌失效）：</div>
+      <h3 data-i18n="m.extResult">✅ 成员已创建 · 令牌仅显示这一次</h3>
+      <div class="hint" data-i18n="hint.token">ROOM_TOKEN（重发将使旧令牌失效）：</div>
       <div class="token-box" id="ext-token"></div>
-      <div class="hint">接入配置 A · HTTP 方式（适用于支持 MCP HTTP 的 Agent，填入其 MCP 服务器配置）：</div>
+      <div class="hint" data-i18n="hint.cfgHttp">接入配置 A · HTTP 方式（适用于支持 MCP HTTP 的 Agent，填入其 MCP 服务器配置）：</div>
       <textarea id="cfg-zcode" readonly></textarea>
-      <div class="hint">接入配置 B · 命令行方式（适用于仅支持 stdio MCP 的 Agent，启动命令如下）：</div>
+      <div class="hint" data-i18n="hint.cfgStdio">接入配置 B · 命令行方式（适用于仅支持 stdio MCP 的 Agent，启动命令如下）：</div>
       <textarea id="cfg-trae" readonly></textarea>
       <div class="row" style="display:flex;gap:8px;margin-top:12px;">
-        <button class="btn primary" id="btn-copy-all" style="margin-top:0;flex:1;">📋 复制全部配置</button>
-        <button class="btn ghost" id="btn-ext-done" style="margin-top:0;flex:1;">完成</button>
+        <button class="btn primary" id="btn-copy-all" data-i18n="btn.copyAll" style="margin-top:0;flex:1;">📋 复制全部配置</button>
+        <button class="btn ghost" id="btn-ext-done" data-i18n="btn.done" style="margin-top:0;flex:1;">完成</button>
       </div>
     </div>
     <div id="modal-bind" style="display:none;">
       <h3 id="bind-title">绑定身份卡</h3>
-      <label class="f">选择身份卡（选「解绑」恢复未绑定，按钮将变回复制令牌）</label>
+      <label class="f" data-i18n="lbl.bindPick">选择身份卡（选「解绑」恢复未绑定，按钮将变回复制令牌）</label>
       <select id="bind-identity" style="width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;font-size:13px;"></select>
       <div class="row" style="display:flex;gap:8px;margin-top:12px;">
-        <button class="btn primary" id="btn-bind-save" style="margin-top:0;flex:1;">保存</button>
-        <button class="btn ghost" id="btn-bind-cancel" style="margin-top:0;flex:1;">取消</button>
+        <button class="btn primary" id="btn-bind-save" data-i18n="btn.save" style="margin-top:0;flex:1;">保存</button>
+        <button class="btn ghost" id="btn-bind-cancel" data-i18n="btn.cancel" style="margin-top:0;flex:1;">取消</button>
       </div>
     </div>
   </div>
 </div>
 
-<script src="i18n.js?v=0.8.0"></script>
-<script src="app.js?v=0.8.0"></script>
+<script src="i18n.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

@@ -6,6 +6,9 @@ let ws = null;
 let currentRoom = 'default';   // 当前会话（第 6 步多房间）
 let rooms = [];                // [{id,name,member_count}]
 let roomLast = {};             // rid -> 最近一条预览文本
+let LAST_CHIP = null;          // setChip 最近入参缓存（langchange 重渲染用）
+let LAST_LLM_READY = null;     // llm-chip 最近就绪状态缓存（同上）
+let LAST_MENTIONS = [];        // 最近一次 @ 定向名单（切语言后重设 scope-tip 用）
 const R = () => currentRoom;
 let agents = [];        // [{id,name,identity_id,identity_label,chat_turns}]
 let identities = [];    // [{id,label,persona,responsibilities,tools_allow,version}]
@@ -31,7 +34,7 @@ function addBubble(msg) {
   } else {
     const who = document.createElement('div');
     who.className = 'who';
-    let name = kind === 'human' ? '你' : kind === 'orchestrator' ? 'CEO 编排' : msg.sender.id;
+    let name = kind === 'human' ? i18t('你') : kind === 'orchestrator' ? i18t('CEO 编排') : msg.sender.id;
     if (kind === 'agent') {
       const meta = agents.find(a => a.id === msg.sender.id);
       name = meta ? meta.name : name;
@@ -47,24 +50,98 @@ function addBubble(msg) {
     lbl.className = 'lbl';
     lbl.textContent = kind === 'agent'
       ? (msg.mentions && msg.mentions.length ? '@' + msg.mentions.join(',@') : agentLabel(msg.sender.id))
-      : kind === 'human' ? '广播' : kind === 'orchestrator' ? 'L1 编排' : 'system';
+      : kind === 'human' ? i18t('广播') : kind === 'orchestrator' ? i18t('L1 编排') : 'system';
     who.appendChild(lbl);
     const body = document.createElement('div');
     body.className = 'body';
     body.textContent = msg.payload.text;
     el.appendChild(who); el.appendChild(body);
+    if (msg.msg_id) attachMsgChrome(el, msg);        // 编号锚 + 星标/删除（system 不挂；需在入 DOM 后挂）
+    renumberFeed();
   }
   el.dataset.ts = String(Date.now());
   feed.appendChild(el);
   feed.scrollTop = feed.scrollHeight;
-  if (kind !== 'system') scheduleFoldCheck(el);
   return el;
+}
+
+/* 位置序号：按 feed 当前顺序对非 system 消息 1..N 重排（删除/归档后自然连续） */
+function renumberFeed() {
+  let n = 0;
+  document.querySelectorAll('#feed .msg').forEach(m => {
+    if (m.classList.contains('system') || m.classList.contains('ghost')) return;
+    n += 1;
+    m.dataset.no = String(n);
+    let no = m.querySelector('.who .msg-no');
+    if (!no) {
+      no = document.createElement('span');
+      no.className = 'msg-no';
+      m.querySelector('.who').insertBefore(no, m.querySelector('.msg-ops'));
+    }
+    no.textContent = '#' + n;
+  });
+}
+
+async function toggleStar(el) {
+  if (!el.dataset.msgId) return;
+  const on = !el.classList.contains('starred');
+  el.classList.toggle('starred', on);           // 乐观切换，失败回滚
+  const mark = el.querySelector('.star-mark');
+  const btn = el.querySelector('.star-btn');
+  if (mark) mark.style.display = on ? '' : 'none';
+  if (btn) { btn.textContent = on ? '★' : '☆'; btn.title = on ? i18t('取消星标') : i18t('星标（免归档）'); }
+  try {
+    const r = await fetch(`/api/messages/${el.dataset.msgId}/star`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ starred: on ? 1 : 0 }),
+    });
+    if (!r.ok) throw new Error(r.status);
+  } catch (e) {
+    el.classList.toggle('starred', !on);
+    if (mark) mark.style.display = on ? 'none' : '';
+    if (btn) { btn.textContent = on ? '☆' : '★'; btn.title = on ? i18t('星标（免归档）') : i18t('取消星标'); }
+    alertSys(i18t('星标操作失败，已还原。'));
+  }
+}
+
+async function deleteMsg(el) {
+  if (!el.dataset.msgId) return;
+  if (!confirm(i18t('删除这条消息？（群内其他成员将不再可见）'))) return;
+  const r = await fetch(`/api/messages/${el.dataset.msgId}`, { method: 'DELETE' }).catch(() => null);
+  if (!r || !r.ok) return alertSys(i18t('删除失败'));
+  el.remove();
+  renumberFeed();
+  alertSys(i18t('消息已删除。'));
+}
+
+/* 跳转：#n 回车 → 滚动定位 + 高亮闪烁 2 秒 */
+function jumpToMsg(n) {
+  const target = document.querySelector(`#feed .msg[data-no="${n}"]`);
+  if (!target) {
+    const total = document.querySelectorAll('#feed .msg[data-no]').length;
+    alertSys(i18t('没有第 {n} 条消息（当前共 {m} 条）').replace('{n}', String(n)).replace('{m}', String(total)));
+    return;
+  }
+  target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  target.classList.remove('jump-flash');
+  void target.offsetWidth;                     // 重启动画
+  target.classList.add('jump-flash');
+  setTimeout(() => target.classList.remove('jump-flash'), 2200);
 }
 
 function agentLabel(id) {
   const m = agents.find(a => a.id === id);
   return (m && m.identity_label) ? m.identity_label : '未绑定';
 }
+
+/* 跳转框：输入 #37 或 37 回车 → 定位高亮 */
+$('jump-input').addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  const v = parseInt(e.target.value.replace(/^#/, '').trim(), 10);
+  e.target.value = '';
+  if (Number.isFinite(v) && v > 0) jumpToMsg(v);
+});
 
 /* 流式渲染 v2：正式气泡只在有完整内容时诞生。
    流式片段写入「幽灵面板」（虚线框、头像呼吸、随内容置底），终态一次性
@@ -98,7 +175,39 @@ function commitGhost(aid, msg, text) {
     note.textContent = msg.tool_summary.join(' ');
     el.appendChild(note);
   }
-  scheduleFoldCheck(el);
+  if (msg && msg.msg_id) attachMsgChrome(el, msg);   // 落定补挂编号/星标/删除
+  renumberFeed();
+}
+
+/* 气泡的编号锚 + 星标/删除操作（system 胶囊不挂；重复调用安全） */
+function attachMsgChrome(el, msg) {
+  if (!msg.msg_id) return;
+  if (!el.dataset.msgId) el.dataset.msgId = msg.msg_id;
+  if (msg.starred) el.classList.add('starred');
+  const who = el.querySelector('.who');
+  if (!who) return;
+  let ops = who.querySelector('.msg-ops');
+  if (ops) { refreshOps(el, ops, msg.starred); renumberFeed(); return; }
+  const starMark = document.createElement('span');
+  starMark.className = 'star-mark';
+  starMark.textContent = '★';
+  if (!msg.starred) starMark.style.display = 'none';
+  ops = document.createElement('span');
+  ops.className = 'msg-ops';
+  ops.innerHTML = '<button class="star-btn"></button><button class="del-btn">✕</button>';
+  refreshOps(el, ops, msg.starred);
+  ops.querySelector('.star-btn').addEventListener('click', () => toggleStar(el));
+  ops.querySelector('.del-btn').addEventListener('click', () => deleteMsg(el));
+  who.appendChild(starMark);
+  who.appendChild(ops);
+  renumberFeed();
+}
+function refreshOps(el, ops, starred) {
+  const btn = ops.querySelector('.star-btn');
+  if (!btn) return;
+  btn.textContent = starred ? '★' : '☆';
+  btn.title = starred ? i18t('取消星标') : i18t('星标（免归档）');
+  ops.querySelector('.del-btn').title = i18t('删除消息');
 }
 
 function finalizeStreaming() {
@@ -110,22 +219,6 @@ function finalizeStreaming() {
     commitGhost(aid, null, text);
   }
   streaming = {};
-}
-
-/* ---------- 长气泡折叠/展开（点击收起与展开） ---------- */
-const FOLD_PX = 240;   // 超过此高度的消息自动折叠
-function scheduleFoldCheck(el) {
-  setTimeout(() => {
-    if (!document.body.contains(el)) return;
-    const body = el.querySelector('.body');
-    if (!body || el.classList.contains('expanded') || body.scrollHeight <= FOLD_PX) return;
-    if (el.querySelector('.fold-tip')) return;
-    el.classList.add('folded');
-    const tip = document.createElement('div');
-    tip.className = 'fold-tip';
-    tip.textContent = '⤵ 点击展开全文';
-    el.appendChild(tip);
-  }, 60);
 }
 
 function handleMessage(msg) {
@@ -170,7 +263,7 @@ function addDeliverBubble(msg) {
     const link = document.createElement('span');
     link.className = 'deliver-file';
     link.textContent = '📎 ' + path;
-    link.title = '点击在文件面板预览';
+    link.title = i18t('点击在文件面板预览');
     link.addEventListener('click', () => {
       openPanel('rp-files');
       previewFile(path);
@@ -212,6 +305,7 @@ function connect() {
   ws.onerror = () => ws.close();
 }
 function setChip(text, color) {
+  LAST_CHIP = { text, color };
   text = i18t(text);
   $('ws-chip').textContent = text;
   $('ws-chip').style.color = color;
@@ -222,14 +316,14 @@ function setChip(text, color) {
 function updateConvoLast(msg) {
   const text = (msg.payload && msg.payload.text) || '';
   if (!text) return;
-  let who = '你';
+  let who = i18t('你');
   if (msg.sender.kind === 'agent') {
     const meta = agents.find(a => a.id === msg.sender.id);
     who = meta ? meta.name : msg.sender.id;
   } else if (msg.sender.kind === 'system') who = '';
   const t = new Date();
   roomLast[currentRoom] = {
-    text: (who ? who + '：' : '') + text.slice(0, 40),
+    text: (who ? who + i18t('：') : '') + text.slice(0, 40),
     time: `${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`,
   };
   renderRooms();
@@ -259,9 +353,10 @@ ${text}`;
   ws.send(JSON.stringify({ type: 'chat', text, mentions }));
 }
 function updateScopeTip(mentions) {
+  LAST_MENTIONS = mentions || [];
   $('scope-tip').textContent = mentions.length
-    ? `定向投递 → ${mentions.map(id => (agents.find(a => a.id === id) || {}).name || id).join(', ')}`
-    : '广播模式：全体 Agent 可见可回';
+    ? `${i18t('定向投递 → ')}${mentions.map(id => (agents.find(a => a.id === id) || {}).name || id).join(', ')}`
+    : i18t('广播模式：全体 Agent 可见可回');
 }
 
 /* ---------- 成员列表（含换绑 + 外部成员） ---------- */
@@ -277,8 +372,8 @@ async function refreshMembers() {
       : `<span class="kind-badge internal">${i18t('内置')}</span>`;
     const bindUi = external
       ? ''
-      : `<select data-agent="${a.id}" title="换绑身份卡">
-          <option value="">— 未绑定 —</option>
+      : `<select data-agent="${a.id}" title="${i18t('换绑身份卡')}">
+          <option value="">${i18t('— 未绑定 —')}</option>
           ${identities.map(c => `<option value="${c.id}" ${c.id === a.identity_id ? 'selected' : ''}>${c.label}</option>`).join('')}
         </select>`;
     // 外部成员：始终可「绑定身份卡」（换绑/解绑）；未绑定时另有「复制令牌」用于接入
@@ -320,7 +415,7 @@ async function refreshMembers() {
     btn.addEventListener('click', async () => {
       if (!confirm(i18t('删除成员？') + btn.dataset.name)) return;
       const r = await fetch(`/api/agents/${btn.dataset.agent}`, { method: 'DELETE' });
-      if (!r.ok) return alertSys((await r.json()).detail || '删除失败');
+      if (!r.ok) return alertSys((await r.json()).detail || i18t('删除失败'));
       alertSys(i18t('已删除成员：') + btn.dataset.name);
       refreshMembers();
     }));
@@ -420,7 +515,7 @@ function alertSys(text) {
 /* ---------- @提及弹出层 ---------- */
 function showMentionPop() {
   const pop = $('mention-pop');
-  pop.innerHTML = `<div class="mp-item all" data-id="__all__">📣 全体成员（广播）</div>` +
+  pop.innerHTML = `<div class="mp-item all" data-id="__all__">${i18t('📣 全体成员（广播）')}</div>` +
     agents.map(a => `<div class="mp-item" data-id="${a.id}"><div class="avatar" style="width:22px;height:22px;font-size:10px;">${a.name[0]}</div>@${a.name}${a.identity_label ? ` · ${a.identity_label}` : ''}</div>`).join('');
   pop.style.display = 'block';
   pop.querySelectorAll('.mp-item').forEach(item => item.addEventListener('mousedown', (e) => {
@@ -492,6 +587,7 @@ $('btn-save-llm').addEventListener('click', async () => {
   const r = await (await fetch('/api/llm-config', {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(cfg),
   })).json();
+  LAST_LLM_READY = r.llm_ready;
   $('llm-chip').textContent = r.llm_ready ? i18t('LLM 已配置') : i18t('LLM 未配置');
   alertSys(r.llm_ready ? 'LLM 配置已保存，正在校验连通性…' : '配置不完整。');
   if (!r.llm_ready) return;
@@ -531,7 +627,7 @@ function showExternalResult(d) {
 }
 async function openAddExternal() {
   $('ext-name').value = '';
-  $('ext-identity').innerHTML = '<option value="">— 暂不绑定 —</option>' +
+  $('ext-identity').innerHTML = `<option value="">${i18t('— 暂不绑定 —')}</option>` +
     identities.map(c => `<option value="${c.id}">${c.label}</option>`).join('');
   $('modal-form').style.display = 'block';
   $('modal-result').style.display = 'none';
@@ -579,7 +675,7 @@ async function refreshFiles() {
       <span class="file-name" title="${p}">📄 ${dir ? `<span class="file-dir">${dir}</span>` : ''}${name}</span>
       <span class="file-ver">v${f.version}</span>
       <span class="file-author ${f.author === 'human' ? 'hum' : ''}">${f.author === 'human' ? '👤' : '🤖'}${f.author === 'human' ? i18t('人类') : f.author}</span>
-      <button class="file-del" data-path="${p}" title="删除">✕</button>
+      <button class="file-del" data-path="${p}" title="${i18t('删除')}">✕</button>
     </div>`;
   }).join('') : `<div class="hint">${i18t('（暂无文件；Agent 交付物与人类上传都会出现在这里）')}</div>`;
 
@@ -605,7 +701,7 @@ async function previewFile(path) {
   const d = await res.json();
   previewedFile = { path: d.path, version: d.version };
   $('file-preview').value = d.content;
-  $('file-preview-head').textContent = `${d.path} · v${d.version} · 作者 ${d.author}`;
+  $('file-preview-head').textContent = `${d.path} · v${d.version} · ${i18t('作者')} ${d.author}`;
 }
 
 $('btn-upload').addEventListener('click', () => $('file-input').click());
@@ -641,7 +737,7 @@ $('btn-save-preview').addEventListener('click', async () => {
   const d = await r.json();
   alertSys(i18t('已保存：') + d.path + ' v' + d.version);
   previewedFile.version = d.version;
-  $('file-preview-head').textContent = `${d.path} · v${d.version} · 作者 你`;
+  $('file-preview-head').textContent = `${d.path} · v${d.version} · ${i18t('作者')} ${i18t('你')}`;
   refreshFiles();
 });
 
@@ -782,11 +878,11 @@ async function refreshRooms() {
 function renderRooms() {
   const el = $('room-list');
   el.innerHTML = rooms.map(r => {
-    const last = roomLast[r.id] || (r.id === currentRoom ? { text: '— 新会话，说点什么吧 —', time: '现在' } : {});
+    const last = roomLast[r.id] || (r.id === currentRoom ? { text: i18t('— 新会话，说点什么吧 —'), time: i18t('现在') } : {});
     return `<div class="convo ${r.id === currentRoom ? 'active' : ''}" data-room="${r.id}">
       <div class="convo-avatar">${esc((r.name || '?')[0])}</div>
       <div class="convo-info">
-        <div class="convo-name">${esc(r.name)} <span class="cnt">· ${r.member_count} 成员</span></div>
+        <div class="convo-name">${esc(r.name)} <span class="cnt">· ${r.member_count} ${i18t('成员')}</span></div>
         <div class="convo-last">${esc(last.text || ' ')}</div>
       </div>
       <div class="convo-time">${esc(last.time || '')}</div>
@@ -801,7 +897,7 @@ async function switchRoom(rid) {
   currentRoom = rid;
   if (ws) { ws.onclose = null; ws.onerror = null; ws.close(); ws = null; }
   $('feed').innerHTML = '';
-  $('file-tree').innerHTML = '<div class="hint">（加载中…）</div>';
+  $('file-tree').innerHTML = `<div class="hint">${i18t('（加载中…）')}</div>`;
   $('file-preview').value = ''; previewedFile = null;
   $('task-list').innerHTML = ''; $('mem-list').innerHTML = '';
   renderRooms();
@@ -811,12 +907,14 @@ async function switchRoom(rid) {
 }
 async function loadRoomView() {
   const data = await (await fetch('/api/room/' + currentRoom)).json();
+  LAST_LLM_READY = data.llm_ready;
   $('llm-chip').textContent = data.llm_ready ? i18t('LLM 已配置') : i18t('LLM 未配置');
   await refreshMembers();
   await refreshFiles();
   await fetchTasks();
   await refreshMemory();
   (data.history || []).forEach(m => handleMessage(m));
+  renumberFeed();   // 历史回放完成后统一编 1..N（回放逐条已编，此处收敛幂等）
 }
 
 /* 新建群聊弹窗 */
@@ -825,8 +923,8 @@ $('btn-new-room').addEventListener('click', async () => {
   $('room-agent-picks').innerHTML = all.map(a =>
     `<label style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:13px;">
       <input type="checkbox" value="${a.id}" ${a.id === 'agent_a' || a.id === 'agent_b' ? '' : ''}>
-      ${esc(a.name)}<span class="kind-badge ${a.kind === 'external' ? 'external' : 'internal'}">${a.kind === 'external' ? '外部' : '内置'}</span>
-    </label>`).join('') || '<div class="hint">（暂无成员）</div>';
+      ${esc(a.name)}<span class="kind-badge ${a.kind === 'external' ? 'external' : 'internal'}">${a.kind === 'external' ? i18t('外部') : i18t('内置')}</span>
+    </label>`).join('') || `<div class="hint">${i18t('（暂无成员）')}</div>`;
   $('room-name-in').value = '';
   $('room-modal-mask').classList.add('on');
 });
@@ -851,15 +949,15 @@ async function refreshSkills() {
   const el = $('skill-list');
   el.innerHTML = list.length ? list.map(s =>
     `<div class="mem-item"><b>${esc(s.name)}</b>.md
-      <div class="mem-meta">${s.chars} 字符 ·
-        <button class="mini-btn" data-export="${esc(s.name)}">导出</button> ·
-        <button class="mini-btn" data-skill="${esc(s.name)}" style="color:#b42318;">删除</button></div>
+      <div class="mem-meta">${s.chars} ${i18t('字符 ·')}
+        <button class="mini-btn" data-export="${esc(s.name)}">${i18t('导出')}</button> ·
+        <button class="mini-btn" data-skill="${esc(s.name)}" style="color:#b42318;">${i18t('删除')}</button></div>
     </div>`).join('')
     : `<div class="hint">${i18t('（暂无技能；在下方添加、导入 .md 文件，或参考内置示例）')}</div>`;
   el.querySelectorAll('button[data-skill]').forEach(b => b.addEventListener('click', async () => {
     if (!confirm(i18t('删除技能？') + b.dataset.skill)) return;
     const r = await fetch(`/api/skills/${b.dataset.skill}`, { method: 'DELETE' });
-    if (!r.ok) return alertSys('删除失败');
+    if (!r.ok) return alertSys(i18t('删除失败'));
     alertSys(i18t('技能已删除')); refreshSkills();
   }));
   el.querySelectorAll('button[data-export]').forEach(b => b.addEventListener('click', async () => {
@@ -922,7 +1020,7 @@ $('skill-files').addEventListener('change', async () => {
     (err ? fail : ok).push(err ? `${f.name}（${err}）` : skillNameFromFile(f.name));
   }
   alertSys(`导入完成：成功 ${ok.length} 个${ok.length ? '（' + ok.join('、') + '）' : ''}` +
-    (fail.length ? `；失败 ${fail.length} 个${fail.length ? '：' + fail.join('、') : ''}` : ''));
+    (fail.length ? i18t('；失败 N 个：').replace('N', String(fail.length)) + fail.join('、') : ''));
   refreshSkills();
 });
 
@@ -930,9 +1028,9 @@ $('skill-files').addEventListener('change', async () => {
 /* ---------- 外观（背景/透明度/动效，localStorage 持久化） ---------- */
 const BG_PRESETS = [
   { id: 'default', name: '默认', en: 'Default', css: '' },
-  { id: 'mist', name: '薄雾', en: 'Mist', css: 'linear-gradient(160deg,#eef2ff 0%,#f6f6f8 55%,#fdf2f8 100%)' },
-  { id: 'dawn', name: '晨曦', en: 'Dawn', css: 'linear-gradient(160deg,#fff7ed 0%,#f6f6f8 50%,#ecfeff 100%)' },
-  { id: 'ink', name: '暮色', en: 'Dusk', css: 'linear-gradient(160deg,#e0e7ff 0%,#f6f6f8 45%,#e0f2fe 100%)' },
+  { id: 'mist', name: '薄雾', en: 'Mist', css: 'linear-gradient(135deg,#10141b 0%,#171e29 100%)' },
+  { id: 'dawn', name: '晨曦', en: 'Dawn', css: 'linear-gradient(135deg,#1a1206 0%,#2a1c0a 100%)' },
+  { id: 'ink', name: '暮色', en: 'Dusk', css: 'linear-gradient(135deg,#0b0c0f 0%,#12141a 100%)' },
 ];
 let appearance = Object.assign(
   { preset: 'default', image: null, mask: 0, bubble: 100, ripple: true },
@@ -943,7 +1041,7 @@ function saveAppearance() { localStorage.setItem('aroom-appearance', JSON.string
 function applyAppearance() {
   const feed = $('feed');
   const preset = BG_PRESETS.find(p => p.id === appearance.preset) || BG_PRESETS[0];
-  const mask = `linear-gradient(rgba(246,246,248,${appearance.mask / 100}), rgba(246,246,248,${appearance.mask / 100}))`;
+  const mask = `linear-gradient(rgba(13,15,18,${appearance.mask / 100}), rgba(13,15,18,${appearance.mask / 100}))`;
   if (appearance.image) {
     feed.style.background = `${mask}, center/cover fixed no-repeat url(${appearance.image})`;
   } else if (preset.css) {
@@ -966,7 +1064,7 @@ function renderBgPresets() {
     return `<div data-preset="${p.id}" title="${p.name}" style="cursor:pointer;height:44px;border-radius:8px;
       border:2px solid ${active ? 'var(--brand)' : 'var(--line)'};background:${p.css || 'var(--bg)'};
       display:flex;align-items:end;justify-content:center;font-size:9px;color:var(--muted);padding-bottom:2px;
-      ${p.id === 'default' ? 'background:#f6f6f8;' : ''}">${I18N_LANG === 'en' && p.en ? p.en : p.name}</div>`;
+      ${p.id === 'default' ? 'background:#151a21;border:1px solid #2a303a;' : ''}">${I18N_LANG === 'en' && p.en ? p.en : p.name}</div>`;
   }).join('');
   el.querySelectorAll('[data-preset]').forEach(d => d.addEventListener('click', () => {
     appearance.preset = d.dataset.preset; appearance.image = null; saveAppearance(); applyAppearance();
@@ -976,7 +1074,7 @@ $('btn-bg-image').addEventListener('click', () => $('bg-file').click());
 $('bg-file').addEventListener('change', () => {
   const f = $('bg-file').files[0];
   if (!f) return;
-  if (f.size > 6 * 1024 * 1024) return alertSys('图片请小于 6MB');
+  if (f.size > 6 * 1024 * 1024) return alertSys(i18t('图片请小于 6MB'));
   const rd = new FileReader();
   rd.onload = () => {
     try {
@@ -1004,16 +1102,6 @@ $('fx-ripple').addEventListener('change', () => {
 
 /* ---------- 动态点击效果：波纹 + 气泡弹跳 ---------- */
 document.addEventListener('pointerdown', (e) => {
-  // 折叠气泡的展开/收起挂在 pointerdown：click 落点可能因布局微动漂移而丢失
-  const fm = e.target.closest && e.target.closest('.msg.folded, .msg.expanded');
-  if (fm) {
-    const toExpand = fm.classList.contains('folded');
-    fm.classList.toggle('folded', !toExpand);
-    fm.classList.toggle('expanded', toExpand);
-    const tip = fm.querySelector('.fold-tip');
-    if (tip) tip.textContent = toExpand ? '⤴ 收起' : '⤵ 点击展开全文';
-    return;
-  }
   if (!appearance.ripple) return;
   const t = e.target.closest('.msg.agent, .msg.orch, .send, .btn, .icon-btn, .rp-tab');
   if (!t) return;
@@ -1029,7 +1117,7 @@ document.addEventListener('pointerdown', (e) => {
   setTimeout(() => rip.remove(), 500);
 });
 // 气泡点击不再重播形变动画（scale 弹跳可能被流式 reflow 打断停在缩小帧，
-// 视觉上即「点击后缩半」）；折叠/展开交互在 pointerdown 处理，波纹保留
+// 视觉上即「点击后缩半」）；波纹保留
 
 /* 手动归档清理（Agent B janitor 流程立即执行） */
 $('btn-archive-now').addEventListener('click', async () => {
@@ -1079,6 +1167,21 @@ document.addEventListener('click', (e) => {
 /* 语言切换：document 级委托（不依赖 boot 内联注册时序） */
 document.addEventListener('change', (e) => {
   if (e.target && e.target.id === 'lang-select') applyLang(e.target.value);
+});
+
+/* langchange：切语言后以新语言重渲染动态区域（applyLang 在 dispatch 前已换静态文案） */
+document.addEventListener('langchange', () => {
+  if (typeof renderRooms === 'function') renderRooms();     // 左栏会话 + #room-name
+  if (typeof refreshMembers === 'function') refreshMembers(); // 成员卡/绑定按钮
+  if (typeof refreshFiles === 'function') refreshFiles();   // 文件列表
+  if (typeof fetchTasks === 'function') fetchTasks();       // 任务卡 + SUB/TASK chips
+  if (typeof refreshMemory === 'function') refreshMemory(); // 记忆列表
+  if (typeof refreshSkills === 'function') refreshSkills(); // 技能列表
+  if (LAST_CHIP && typeof setChip === 'function') setChip(LAST_CHIP.text, LAST_CHIP.color);
+  if (LAST_LLM_READY !== null) $('llm-chip').textContent = LAST_LLM_READY ? i18t('LLM 已配置') : i18t('LLM 未配置');
+  if (typeof updateScopeTip === 'function') updateScopeTip(LAST_MENTIONS);
+  document.querySelectorAll('#feed .msg[data-no] .msg-ops').forEach(ops =>   // 星标/删除按钮提示随语言重译
+    refreshOps(null, ops, ops.closest('.msg').classList.contains('starred')));
 });
 
 /* ---------- 启动 ---------- */
