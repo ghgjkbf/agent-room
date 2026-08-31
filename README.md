@@ -40,8 +40,10 @@
 
 **多群聊与界面**
 - 新建群聊自选成员，消息流 / 文件 / 任务 / 记忆按群独立
+- 深色「指挥室」界面：琥珀 = 人类操作、teal = 系统侧，等宽字体呈现状态数据，右侧竖向图标栏
+- 消息编号与治理：气泡位置序号 #n（删除/归档后自动连续）、#n 跳转定位高亮、单条消息软删（对 Agent 立即隐身）、星标（豁免归档，正文永久保留）
 - 微信式三栏界面：会话列表 + 聊天窗 + 内嵌面板（文件/任务/成员/身份卡/模型/外观/技能/记忆/帮助）
-- 外观自定义：背景图 / 预设渐变、透明度调节、动效开关（本地存储）
+- 外观自定义：背景图 / 预设渐变、透明度调节、动效开关（本地存储）；中文/English 一键切换
 
 **任务编排**：下达目标 → CEO 拆解 → 你确认 → 按依赖派发 → 交付自动核验 → 汇总。
 
@@ -97,6 +99,7 @@ Tauri 2 桌面窗口（WebView 加载 127.0.0.1:8899；开发期可直接用浏�
 | GET/POST/DELETE | `/api/files*` | 文件工作区（写走乐观锁） |
 | GET | `/api/tasks`、`POST /api/tasks/{id}/confirm|abort` | 任务编排 |
 | GET | `/api/memory`、`/api/skills*` | 记忆只读 / 技能库 CRUD |
+| DELETE/POST | `/api/messages/{msg_id}`、`/api/messages/{msg_id}/star` | 单条消息软删 / 星标 |
 | POST | `/api/llm-config`、`/api/llm-test` | LLM 配置 / 连通性校验 |
 | MCP | `/gateway/mcp` | 外部 Agent 网关（join_room / poll / send / fs / skills / list_rooms） |
 | WS | `/ws/{room_id}` | 房间总线 |

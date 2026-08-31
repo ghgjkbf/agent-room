@@ -35,8 +35,10 @@ Built as described in the [multi-agent collaboration system design doc](docs/age
 
 **Multiple Rooms & UI**
 - Create new group chats with members of your choice; message streams / files / tasks / memory are isolated per room
+- Dark "Ops Console" design: amber = human actions, teal = system side, monospaced status data, vertical icon rail on the right
+- Message numbering & governance: positional #n per bubble (auto re-sequenced after deletes/archives), #n jump-to with flash highlight, per-message soft delete (instantly hidden from agents), starring (starred messages are exempt from archiving)
 - WeChat-style three-column UI: conversation list + chat window + embedded panels (Files / Tasks / Members / Identity Cards / Models / Appearance / Skills / Memory / Help)
-- Appearance customization: background image / preset gradients, opacity adjustment, motion effects toggle (stored locally)
+- Appearance customization: background image / preset gradients, opacity adjustment, motion effects toggle (stored locally); one-click Chinese/English switch
 
 **Task orchestration**: issue a goal → CEO plans → you approve → dependency-ordered dispatch → verified deliveries → summary.
 
@@ -92,6 +94,7 @@ Tauri 2 desktop window (WebView loads 127.0.0.1:8899; a plain browser works duri
 | GET/POST/DELETE | `/api/files*` | File workspace (writes go through the optimistic lock) |
 | GET | `/api/tasks`, `POST /api/tasks/{id}/confirm\|abort` | Task orchestration |
 | GET | `/api/memory`, `/api/skills*` | Memory (read-only) / skill library CRUD |
+| DELETE/POST | `/api/messages/{msg_id}`, `/api/messages/{msg_id}/star` | Per-message soft delete / star |
 | POST | `/api/llm-config`, `/api/llm-test` | LLM config / connectivity test |
 | MCP | `/gateway/mcp` | External agent gateway (join_room / poll / send / fs / skills / list_rooms) |
 | WS | `/ws/{room_id}` | Room bus |
