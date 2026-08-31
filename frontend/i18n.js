@@ -234,6 +234,22 @@ const STR = {
   'dyn.wsEmpty': ['（工作区暂无文件；先在「文件」面板上传或让 Agent 交付）', '(Workspace is empty; upload via the Files panel or let an agent deliver)'],
   'dyn.pickRefs': ['点击选择要引用的文件（可多选）', 'Click files to reference (multi-select)'],
 
+  /* ===== 常用指令条 ===== */
+  'cmd.archive': ['🧹 归档清理', '🧹 Archive'],
+  'cmd.archive.tip': ['立即归档清理本群聊', 'Archive & clean this room now'],
+  'cmd.memSummary': ['💾 存记忆', '💾 Save memory'],
+  'cmd.memSummary.tip': ['让 B 总结本轮讨论并存入公共记忆', 'Ask B to digest this session into shared memory'],
+  'cmd.memQuery': ['🔍 查记忆', '🔍 Query memory'],
+  'cmd.memQuery.tip': ['让 B 检索公共记忆（补上要查的问题）', 'Ask B to search shared memory (append your question)'],
+  'cmd.clearDone': ['🗑 清完成任务', '🗑 Clear done tasks'],
+  'cmd.clearDone.tip': ['清空已结束的任务记录', 'Clear finished task records'],
+  'cmd.clearChat': ['✂️ 删消息', '✂️ Delete messages'],
+  'cmd.clearChat.tip': ['让 B 定向删除消息（补 #序号）', 'Ask B to delete messages by #number'],
+  'cmd.memClear': ['⚠️ 清空记忆', '⚠️ Clear memory'],
+  'cmd.memClear.tip': ['清空本群全部公共记忆（慎用）', 'Clear ALL shared memory of this room (careful)'],
+  'cmd.status': ['📊 房间状态', '📊 Room status'],
+  'cmd.status.tip': ['让 A 汇总成员状态与任务进展', 'Ask A to summarize members and task progress'],
+
   /* ===== 消息序号 / 星标 / 软删 / 跳转 ===== */
   'dyn.confirmDelMsg': ['删除这条消息？（群内其他成员将不再可见）', 'Delete this message? (it disappears for everyone in the room)'],
   'dyn.msgDeleted': ['消息已删除。', 'Message deleted.'],
@@ -334,8 +350,13 @@ function i18nApplyFeedChrome() {
   }
 }
 
-/* 动态串：整串精确反查 → 当前语言；查不到原样返回 zh */
+/* 动态串：整串精确反查 → 当前语言；查不到原样返回 zh。
+   快捷路径：传 STR 语义 key（如 'cmd.archive'）直接取词条，供新 UI 免建 zh 反查。 */
 function i18t(zh) {
+  if (Object.prototype.hasOwnProperty.call(STR, zh)) {
+    const direct = STR[zh];
+    return I18N_LANG === 'en' ? (direct[1] ?? direct[0]) : direct[0];
+  }
   const k = REV[zh];
   if (!k) return zh;
   const v = STR[k];

@@ -1135,6 +1135,45 @@ $('btn-archive-now').addEventListener('click', async () => {
   refreshMemory();
 });
 
+/* ---------- 常用指令条（composer 上方 chips） ----------
+   直调型：点即执行（confirm 后调 API，结果走 alertSys）；
+   预填型：往输入框塞一段指令模板，用户补参数后回车发出。 */
+const QUICK_COMMANDS = [
+  { id: 'cmd.archive', icon: '🧹', run: () => $('btn-archive-now').click() },          // 归档清理（复用既有 confirm/API）
+  { id: 'cmd.memSummary', icon: '💾', prefill: '@B 请把本轮讨论的要点与结论总结存入公共记忆。' },
+  { id: 'cmd.memQuery', icon: '🔍', prefill: '@B 请从公共记忆检索：' },
+  { id: 'cmd.clearDone', icon: '🗑', run: () => $('btn-tasks-clear').click() },        // 清已完成任务
+  { id: 'cmd.clearChat', icon: '✂️', prefill: '@B 请定向删除以下消息（报 #序号）：' },
+  { id: 'cmd.memClear', icon: '⚠️', run: () => $('btn-mem-clear').click() },           // 清空公共记忆（有 confirm）
+  { id: 'cmd.status', icon: '📊', prefill: '@A 请汇总当前房间状态：各成员在做什么、任务进展、待办事项。' },
+];
+
+function renderCmdBar() {
+  const bar = $('cmd-bar');
+  if (!bar) return;
+  bar.innerHTML = QUICK_COMMANDS.map(c =>
+    `<button class="cmd-chip" data-cmd="${c.id}" title="">${i18t(c.id)}</button>`).join('');
+  bar.querySelectorAll('[data-cmd]').forEach(btn => btn.addEventListener('click', () => {
+    const cmd = QUICK_COMMANDS.find(c => c.id === btn.dataset.cmd);
+    if (!cmd) return;
+    if (cmd.run) { cmd.run(); return; }
+    const draft = $('draft');
+    draft.value = (draft.value ? draft.value + '\n' : '') + i18t(cmd.prefill);
+    draft.focus();
+    // 光标置尾（检索/删除类指令方便直接续写参数）
+    draft.setSelectionRange(draft.value.length, draft.value.length);
+  }));
+  refreshCmdTips();
+}
+function refreshCmdTips() {  // title 双语（en 切换后同步）
+  const bar = $('cmd-bar');
+  if (!bar) return;
+  QUICK_COMMANDS.forEach(c => {
+    const el = bar.querySelector(`[data-cmd="${c.id}"]`);
+    if (el && el.title !== undefined) el.title = i18t(c.id + '.tip');
+  });
+}
+
 /* ---------- 引用工作区文件（随消息发给 Agent） ---------- */
 let pendingRefs = new Set();
 function hideRefsPop() { $('refs-pop').style.display = 'none'; }
@@ -1187,6 +1226,7 @@ document.addEventListener('langchange', () => {
   if (typeof updateScopeTip === 'function') updateScopeTip(LAST_MENTIONS);
   document.querySelectorAll('#feed .msg[data-no] .msg-ops').forEach(ops =>   // 星标/删除按钮提示随语言重译
     refreshOps(null, ops, ops.closest('.msg').classList.contains('starred')));
+  if (typeof renderCmdBar === 'function') renderCmdBar();   // 常用指令条随语言重译
 });
 
 /* ---------- 启动 ---------- */
@@ -1204,6 +1244,7 @@ async function boot() {
   renderToolCheckboxes([]);   // 初始即渲染工具复选框（新建卡状态），一键白名单随时可用
   await refreshSkills();
   applyAppearance();
+  renderCmdBar();             // 常用指令条（boot 时语言已定，langchange 会重译）
   $('lang-select').value = I18N_LANG;
   await loadRoomView();
   connect();
