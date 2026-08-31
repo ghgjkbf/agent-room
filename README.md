@@ -11,14 +11,14 @@
 ## 功能总览
 
 **群聊协作**
-- 双内置 Agent 并行流式回复：Agent A·用户服务助手 / Agent B·群聊管家（内容治理 / 记忆管理 / 越权监管 / 定时归档；专属行为规范见 `backend/agent_md/`，绑定身份卡后以身份卡为准）
-- @提及定向投递、广播全员、P0 interrupt 随时打断一切生成
-- 外部 Agent（TRAE / ZCode / 任何支持 MCP 的 Agent）经网关进群，与内置成员平权协作
+- 双内置 Agent 并行流式回复：Agent A·用户服务助手（答疑 / 提示词辅助 / **权限代理**——受你委托为成员换绑身份卡）、Agent B·群聊管家（内容治理 / 记忆管理 / 越权监管 / 定时归档 / **兼 CEO 编排**）
+- 成员平权互聊：所有成员广播互通，外部成员经网关发言也能唤起内置成员；显式 @ 定向、P0 interrupt 随时打断
+- 常用指令条：🧹归档 / 💾存记忆 / 🔍查记忆 / 🗑清完成任务 / ✂️删消息 / ⚠️清空记忆 / 📊房间状态，一键直达
+- 消息治理：气泡 #n 编号（删除/归档后自动连续）、#n 跳转定位、单条消息星标（**豁免归档**）与软删
 
-**编排闭环（CEO）**
-- 任务面板下达目标 → CEO 拆任务分解图 → 人类确认 → 排产单按依赖派发 → 执行者交付 → 系统核验 + LLM 验收（不合格打回重做）→ 汇总 @人类
+**编排闭环（CEO，由 Agent B 兼任）**
+- 任务面板下达目标 → 拆任务分解图 → 人类确认 → 排产单按依赖派发 → 执行者交付 → 系统核验 + LLM 验收（不合格打回重做，**不设上限直至通过**）→ 汇总沉淀记忆
 - 交付真实性核验：声称写了文件而工作区没有 → 直接打回，幻觉交付骗不过验收
-- 任务级熔断：互聊超限自动暂停 @人类裁决
 
 **文件工作区**
 - 群内共享工作区：上传 / 预览 / 编辑 / 删除；Agent 经 fs 工具读写同一空间
@@ -26,28 +26,18 @@
 - 交付自动播报，点附件直达预览
 
 **身份与技能**
-- 身份卡：标签 / 风格 / 职责 / 工具白名单（fs.*、skills.*、memory.query、shell.run、doc.read、browser.open、chat.archive），白名单外调用硬拒绝并群里可见
-- 内置双 Agent 出厂身份卡 + 岗位手册（`backend/agent_md/`）：A/B 开箱即有工具与行为边界
-- 内部技能库：写法规范 / 模板 / 工作流（md 文档），支持导入导出 .md、从本机技能库（ZCode / TRAE）一键批量导入、Agent 可自建技能（skills.write）
-
-**能力工具层**
-- 电脑控制（shell.run，高危需显式勾选）、网页读取（browser.open）、文档转 Markdown（doc.read，markitdown）、记忆检索（memory.query）、主动归档（chat.archive）
+- 身份卡：标签 / 风格 / 职责 / **发言领域 focus（广播按领域选人，留空 = 只响应 @ 与排产单）** / 工具权限
+- **工具权限默认全开**：仅 🔒 核心权限（shell.run 电脑控制 / chat.archive / chat.delete / admin.* 授权）须显式勾选
+- 内置双 Agent 出厂身份卡 + 岗位手册（`backend/agent_md/`）；内部技能库支持导入导出 .md、Agent 自建技能
 
 **记忆与治理**
-- 向量记忆：房间公共记忆 + Agent 私有记忆物理隔离，检索 top-k 自动注入上下文；记忆可单条删除、公共记忆可一键清空
-- 聊天归档：Agent B 可用 chat.archive 主动归档（系统亦定时触发），总结沉淀公共记忆并清理存储（互聊不设上限）；成员面板可手动触发
-- 任务治理：任务完成后可单条删除或一键清空已结束任务
+- 向量记忆：房间公共记忆 + Agent 私有记忆物理隔离，检索 top-k 自动注入上下文；单条删除 / 一键清空
+- 聊天归档：Agent B 定时或手动归档，总结沉淀公共记忆并清理原文（星标消息豁免）；`backend/reset_init.py` 一键恢复出厂
 
 **多群聊与界面**
 - 新建群聊自选成员，消息流 / 文件 / 任务 / 记忆按群独立
 - 深色「指挥室」界面：琥珀 = 人类操作、teal = 系统侧，等宽字体呈现状态数据，右侧竖向图标栏
-- 消息编号与治理：气泡位置序号 #n（删除/归档后自动连续）、#n 跳转定位高亮、单条消息软删（对 Agent 立即隐身）、星标（豁免归档，正文永久保留）
-- 微信式三栏界面：会话列表 + 聊天窗 + 内嵌面板（文件/任务/成员/身份卡/模型/外观/技能/记忆/帮助）
-- 外观自定义：背景图 / 预设渐变、透明度调节、动效开关（本地存储）；中文/English 一键切换
-
-**任务编排**：下达目标 → CEO 拆解 → 你确认 → 按依赖派发 → 交付自动核验 → 汇总。
-
-![任务面板](docs/screenshots/tasks.png)
+- 中文 / English 一键切换（全站无中文残留）；背景 / 透明度 / 动效自定义
 
 ## 快速开始
 
@@ -79,13 +69,13 @@ Tauri 2 桌面窗口（WebView 加载 127.0.0.1:8899；开发期可直接用浏�
   └─ FastAPI sidecar（127.0.0.1:8899，同端口托管前端）
        ├─ WS 房间总线（消息先落库再 asyncio.gather 扇出）
        ├─ SQLite 事件流（append-only，重启回放；tasks/subtasks/files/kv 索引表）
-       ├─ CEO 编排器（总线监听器：拆解/确认/派发/验收/熔断）
+       ├─ 编排器（总线监听器：拆解/确认/派发/验收/汇总，署名「CEO 编排」）
        ├─ 向量记忆（公私 collection 隔离，内置向量库可换装 Chroma）
-       └─ MCP 网关（streamable-http，外部 Agent 一等公民；fs/skills/list_rooms 工具）
+       └─ MCP 网关（streamable-http，外部 Agent 一等公民；fs/skills/list_rooms/chat_delete 工具）
 ```
 
 - LLM 配置存本机数据库（重启不丢、不出本机）；embedding 默认本地哈希向量，可经环境变量接入远程
-- 环境变量（均可选）：`AGENT_ROOM_PORT`、`AGENT_ROOM_LLM_BASE_URL / API_KEY / MODEL`、`AGENT_ROOM_LLM_EMBEDDING_MODEL`、`AGENT_ROOM_TASK_MAX_CHAT_TURNS`、`AGENT_ROOM_SUBTASK_MAX_RETRIES`、`AGENT_ROOM_JANITOR_INTERVAL_S / MIN_MSGS`、`AGENT_ROOM_MEMORY_TOP_K`
+- 环境变量（均可选）：`AGENT_ROOM_PORT`、`AGENT_ROOM_LLM_BASE_URL / API_KEY / MODEL`、`AGENT_ROOM_LLM_EMBEDDING_MODEL`、`AGENT_ROOM_TASK_MAX_CHAT_TURNS`、`AGENT_ROOM_SUBTASK_MAX_RETRIES`、`AGENT_ROOM_JANITOR_INTERVAL_S / MIN_MSGS`、`AGENT_ROOM_MEMORY_TOP_K`、`AGENT_ROOM_SKILLS_ZCODE / TRAE / TRAE_BUILTIN`（本机技能库导入路径）
 
 ## API 概览
 
@@ -97,11 +87,11 @@ Tauri 2 桌面窗口（WebView 加载 127.0.0.1:8899；开发期可直接用浏�
 | GET | `/api/agents?room_id=` | 成员列表（`all=1` 查注册表全量） |
 | POST/DELETE | `/api/agents/external`、`/api/agents/{aid}` | 外部成员建删 / 令牌重发 |
 | GET/POST/DELETE | `/api/files*` | 文件工作区（写走乐观锁） |
-| GET | `/api/tasks`、`POST /api/tasks/{id}/confirm|abort` | 任务编排 |
+| GET | `/api/tasks`、`POST /api/tasks/{id}/confirm\|abort` | 任务编排 |
 | GET | `/api/memory`、`/api/skills*` | 记忆只读 / 技能库 CRUD |
 | DELETE/POST | `/api/messages/{msg_id}`、`/api/messages/{msg_id}/star` | 单条消息软删 / 星标 |
 | POST | `/api/llm-config`、`/api/llm-test` | LLM 配置 / 连通性校验 |
-| MCP | `/gateway/mcp` | 外部 Agent 网关（join_room / poll / send / fs / skills / list_rooms） |
+| MCP | `/gateway/mcp` | 外部 Agent 网关（join_room / poll / send / fs / skills / list_rooms / chat_delete） |
 | WS | `/ws/{room_id}` | 房间总线 |
 
 ## 目录
@@ -109,24 +99,25 @@ Tauri 2 桌面窗口（WebView 加载 127.0.0.1:8899；开发期可直接用浏�
 ```
 backend/
   main.py           启动入口（API 路由注册 / lifespan / 静态托管）
+  reset_init.py     一键恢复出厂（清空运行数据，保留出厂身份卡）
   mcp_stdio.py      stdio 桥（仅支持命令行 MCP 的 Agent 接入）
   agent_md/         内置 Agent 专属行为规范（注入 system prompt）
   skills/           内置技能文档（用户可在界面增删导入导出）
   app/
     core/           配置 / SQLite / 消息协议
     rooms/          房间总线（监听器机制）/ 群聊 API / 聊天归档 janitor
-    agents/         流式回复器（Function Calling 工具循环）/ 成员 API
+    agents/         流式回复器（工具循环 / 成员互聊调度）/ 成员 API
     identities/     身份卡
     files/          文件工作区（存储 / 工具 schema / API）
-    orchestrator/   CEO 编排器 + 任务 API
+    orchestrator/   编排器 + 任务 API
     memory/         向量记忆（公私隔离）+ embedding 可换装
     skills/         技能库（存储 / API）
     mcp_gateway/    MCP 接入网关（streamable-http + 双因子令牌）
-  tests/            pytest（47 例：网关 / 文件 / 工具循环 / 编排 / 记忆 / 归档 / 多房间）
-frontend/           单页前端（原生 HTML/CSS/JS，微信式三栏，无框架）
+  tests/            pytest（54 例：网关 / 文件 / 工具循环 / 编排 / 记忆 / 归档 / 多房间）
+frontend/           单页前端（原生 HTML/CSS/JS，深色三栏，无框架，中英双语）
 src-tauri/          Tauri 2 壳（窗口 + sidecar 生命周期）
 scripts/            launch-agent-room.vbs 启动器（可移植）
-docs/               设计文档 / 各步交接文档 / CHANGELOG
+docs/               设计文档 / CHANGELOG
 ```
 
 ## 测试
@@ -139,7 +130,7 @@ cd backend && .venv\Scripts\python -m pytest tests -q
 
 - [ ] Tauri release 打包（NSIS/MSI 安装包，sidecar 随包分发）
 - [ ] 外部 Agent 承接排产单（claim_subtask 等工具 + 网关二次权限校验 + 无人值守开关）
-- [ ] 技能驱动的工作流执行引擎（md 定义结构化步骤，CEO 直接引用为子任务模板）
+- [ ] 技能驱动的工作流执行引擎（md 定义结构化步骤，编排器直接引用为子任务模板）
 - [ ] 部门主管层（L2）、跨房间记忆、成本仪表盘（V2）
 
 ## 文档
