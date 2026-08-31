@@ -84,15 +84,21 @@ def test_read_delete_not_found():
     assert ei2.value.status_code == 404
 
 
-# ---------- 工具白名单过滤 ----------
+# ---------- 工具过滤（v0.9.1 默认全开 + 核心权限勾选） ----------
 
-def test_filter_tools_strict():
-    assert filter_tools(["fs.read", "fs.write"]) == [
-        t for t in FS_TOOLS if t["function"]["name"] in ("fs.read", "fs.write")]
-    assert filter_tools([]) == []
-    assert filter_tools(None) == []
-    # 白名单外的名字拿不到定义
-    assert filter_tools(["git.status"]) == []  # 未实现的工具拿不到定义
+def test_filter_tools_open_by_default():
+    """默认全开：未勾选也能拿到非核心工具；核心权限须显式勾选。"""
+    from app.files.tools import ALL_TOOLS, RESTRICTED_TOOLS
+    names = lambda ts: {t["function"]["name"] for t in ts}
+    # 空清单 → 拿到除核心权限外的全部工具
+    got = names(filter_tools([]))
+    assert got == names(ALL_TOOLS) - RESTRICTED_TOOLS
+    # shell.run 不勾选就拿不到
+    assert "shell.run" not in got
+    # 显式勾选后拿到
+    assert "shell.run" in names(filter_tools(["shell.run"]))
+    # 未实现的工具永远拿不到
+    assert "git.status" not in names(filter_tools(["git.status"]))
 
 
 def test_exec_fs_tool_and_whitelist_enforcement():

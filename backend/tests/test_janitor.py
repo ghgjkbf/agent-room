@@ -173,9 +173,9 @@ def test_chat_archive_tool_force(monkeypatch, tmp_path):
                 "SELECT COUNT(*) c FROM messages WHERE room_id=? AND type='chat'",
                 (room,)).fetchone()["c"]
         assert left == 0
-        # 白名单独立
+        # v0.9.1：勾选 chat.archive（核心权限）后可拿到定义
         tools = filter_tools(["chat.archive"])
-        assert {t["function"]["name"] for t in tools} == {"chat.archive"}
+        assert "chat.archive" in {t["function"]["name"] for t in tools}
 
     try:
         asyncio.run(_run())

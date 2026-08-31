@@ -247,11 +247,30 @@ CHAT_TOOLS = [
 
 ALL_TOOLS = FS_TOOLS + SKILL_TOOLS + MEMORY_TOOLS + CAP_TOOLS + CHAT_TOOLS + ADMIN_TOOLS
 
+# 核心权限：默认不开放，仍需身份卡显式勾选（高危/治理/授权类）
+RESTRICTED_TOOLS = {
+    "shell.run",           # 电脑控制，高危
+    "chat.delete",         # 定向删消息，治理
+    "chat.archive",        # 批量归档清理，治理
+    "admin.list_members",  # 成员册
+    "admin.list_identities",
+    "admin.bind_identity", # 权限代理，最高敏
+}
+
+# 默认开放集：除核心权限外的全部工具（v0.9.1 白名单改道——方便工作）
+
 
 def filter_tools(tools_allow: list[str] | None) -> list[dict]:
-    """按身份卡 tools_allow 过滤；白名单外的工具不进定义（严格模式）。"""
+    """按身份卡 tools_allow 过滤。
+
+    v0.9.1 改道：默认全开——未列出的工具除 RESTRICTED_TOOLS 外均可调用；
+    核心权限（高危/治理/授权类）仍需显式勾选。tools_allow 现在的语义是
+    「额外勾选的核心权限 + 兼容旧显式清单」。
+    """
     allow = set(tools_allow or [])
-    return [t for t in ALL_TOOLS if t["function"]["name"] in allow]
+    return [t for t in ALL_TOOLS
+            if t["function"]["name"] not in RESTRICTED_TOOLS
+            or t["function"]["name"] in allow]
 
 
 async def _notify_deliver(bus_registry, room_id: str, author: str, path: str, version: int, size: int):

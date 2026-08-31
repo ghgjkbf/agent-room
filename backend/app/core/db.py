@@ -55,6 +55,7 @@ CREATE TABLE IF NOT EXISTS identities (
   label TEXT NOT NULL,
   config_yaml TEXT,
   author TEXT,
+  focus TEXT DEFAULT '[]',
   version INTEGER DEFAULT 1,
   created_at TEXT
 );
@@ -156,6 +157,8 @@ def init_db():
             conn.execute("ALTER TABLE identities ADD COLUMN tools_allow TEXT DEFAULT '[]'")
         if "budget_turns" not in cols:
             conn.execute("ALTER TABLE identities ADD COLUMN budget_turns INTEGER DEFAULT 6")
+        if "focus" not in cols:
+            conn.execute("ALTER TABLE identities ADD COLUMN focus TEXT DEFAULT '[]'")
         # agents 表补排产轮数计数
         acols = {r[1] for r in conn.execute("PRAGMA table_info(agents)")}
         if "chat_turns" not in acols:

@@ -413,7 +413,9 @@
       <input type="text" id="id-persona" placeholder="严谨、简洁、不懂就问" data-i18n-ph="ph.idPersona">
       <label class="f" data-i18n="lbl.idResp">职责 responsibilities（顿号分隔）</label>
       <input type="text" id="id-resp" placeholder="检索资料、写调研笔记" data-i18n-ph="ph.idResp">
-      <div class="grp" data-i18n="grp.tools">工具白名单 tools_allow</div>
+      <label class="f" data-i18n="lbl.idFocus">发言领域 focus（顿号分隔，命中才接话广播；留空 = 只响应 @ 与排产单）</label>
+      <input type="text" id="id-focus" placeholder="前端、样式、组件" data-i18n-ph="ph.idFocus">
+      <div class="grp" data-i18n="grp.tools">核心权限勾选 tools_allow（🔒 须勾选，其余默认可用）</div>
       <div style="display:flex;gap:6px;margin-bottom:5px;">
         <button class="mini-btn" id="btn-tools-rec" data-i18n="btn.toolsRec">⚡ 一键：文件+技能</button>
         <button class="mini-btn" id="btn-tools-clear" data-i18n="btn.clear">清空</button>

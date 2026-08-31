@@ -12,7 +12,8 @@ let LAST_MENTIONS = [];        // 最近一次 @ 定向名单（切语言后重�
 const R = () => currentRoom;
 let agents = [];        // [{id,name,identity_id,identity_label,chat_turns}]
 let identities = [];    // [{id,label,persona,responsibilities,tools_allow,version}]
-const TOOL_OPTIONS = ['fs.read', 'fs.write', 'fs.list', 'skills.list', 'skills.read', 'skills.write', 'memory.query', 'doc.read', 'browser.open', 'shell.run', 'chat.archive'];
+const TOOL_OPTIONS = ['fs.read', 'fs.write', 'fs.list', 'skills.list', 'skills.read', 'skills.write', 'memory.query', 'doc.read', 'browser.open', 'shell.run', 'chat.archive', 'chat.delete', 'admin.list_members', 'admin.list_identities', 'admin.bind_identity'];
+const RESTRICTED_TOOLS = ['shell.run', 'chat.archive', 'chat.delete', 'admin.list_members', 'admin.list_identities', 'admin.bind_identity'];  // 核心权限：默认不开放，勾选才生效
 
 /* 签名元素：成员专属色相（id 稳定哈希 → hsl 色环），一眼分辨谁在说话 */
 function hueFor(id) {
@@ -472,14 +473,19 @@ async function refreshIdentities() {
 }
 
 function renderToolCheckboxes(selected) {
-  $('id-tools').innerHTML = TOOL_OPTIONS.map(t => `
-    <label><input type="checkbox" value="${t}" ${selected.includes(t) ? 'checked' : ''}>${t}</label>`).join('');
+  $('id-tools').innerHTML = TOOL_OPTIONS.map(t => {
+    const core = RESTRICTED_TOOLS.includes(t);
+    return `<label style="${core ? 'color:var(--brand-strong);' : 'opacity:.85;'}">` +
+      `<input type="checkbox" value="${t}" ${selected.includes(t) ? 'checked' : ''}>${t}${core ? ' 🔒' : ''}</label>`;
+  }).join('') +
+  `<div class="hint" style="margin-top:4px;">非 🔒 工具默认全员可用；🔒 核心权限（高危/治理/授权）须勾选才开放。</div>`;
 }
 function loadCard(c) {
   editingId = c ? c.id : null;
   $('id-label').value = c ? c.label : '';
   $('id-persona').value = c ? c.persona : '';
   $('id-resp').value = c ? c.responsibilities.join('、') : '';
+  $('id-focus').value = c ? (c.focus || []).join('、') : '';
   renderToolCheckboxes(c ? c.tools_allow : []);
 }
 
@@ -488,6 +494,7 @@ async function saveCard() {
     label: $('id-label').value.trim(),
     persona: $('id-persona').value.trim(),
     responsibilities: $('id-resp').value.split(/[、,,]/).map(s => s.trim()).filter(Boolean),
+    focus: $('id-focus').value.split(/[、,,]/).map(s => s.trim()).filter(Boolean),
     tools_allow: [...$('id-tools').querySelectorAll('input:checked')].map(i => i.value),
   };
   if (!card.label) return alertSys('请填写显示标签 label');
@@ -803,9 +810,7 @@ function renderTasks(tasks) {
 }
 /* 身份卡：一键白名单组合 */
 $('btn-tools-rec').addEventListener('click', () => {
-  $('id-tools').querySelectorAll('input').forEach(i => {
-    i.checked = ['fs.list', 'fs.read', 'fs.write', 'skills.list', 'skills.read'].includes(i.value);
-  });
+  $('id-tools').querySelectorAll('input').forEach(i => { i.checked = true; });  // 一键勾全部核心权限
 });
 $('btn-tools-clear').addEventListener('click', () => {
   $('id-tools').querySelectorAll('input').forEach(i => { i.checked = false; });

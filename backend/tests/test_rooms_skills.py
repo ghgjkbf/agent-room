@@ -65,9 +65,12 @@ def test_skill_tools_via_exec():
         assert r["ok"] and "技能内容X" in r["content"]
         r = json_loads(exec_fs_tool_sync("default", "agent_a", "skills.read", {"name": "nope"}))
         assert not r["ok"]
-        # 白名单过滤：只勾 skills.read 时拿不到 fs 工具定义
+        # v0.9.1 默认全开：核心权限只看勾选（skills.read 非核心，已在默认集内）
+        from app.files.tools import RESTRICTED_TOOLS
         tools = filter_tools(["skills.read"])
-        assert {t["function"]["name"] for t in tools} == {"skills.read"}
+        got = {t["function"]["name"] for t in tools}
+        assert "skills.read" in got and "shell.run" not in got  # shell.run 属核心权限未勾
+        assert got | RESTRICTED_TOOLS >= got  # 未勾核心权限时绝不出现在结果里
     finally:
         store.delete_skill(name)
 
@@ -302,9 +305,11 @@ def test_memory_query_tool_public_only(tmp_path, monkeypatch):
                                            {"query": "口号结论"}))
         assert r["ok"] and "智聚群力" in r["hits"][0]["text"]
         assert all("绝密" not in h["text"] for h in r["hits"])
-        # 白名单独立：只勾 memory.query 时拿不到 fs 工具
+        # v0.9.1 默认全开：memory.query（非核心）在默认集内，fs 工具同样在
         tools = filter_tools(["memory.query"])
-        assert {tl["function"]["name"] for tl in tools} == {"memory.query"}
+        got = {tl["function"]["name"] for tl in tools}
+        assert {"memory.query", "fs.read", "fs.list"} <= got
+        assert "shell.run" not in got  # 核心权限未勾
 
     asyncio.run(_run())
 
@@ -369,9 +374,10 @@ def test_overreach_announcement_wakes_agent_b(monkeypatch):
             return _gen()
 
     class _Completions:
+        calls = {"n": 0}  # 类属性，测试中可改写 mock 行为
         async def create(self, *a, **kw):
-            calls["n"] += 1
-            if calls["n"] == 1:
+            type(self).calls["n"] += 1
+            if type(self).calls["n"] == 1:
                 return _Iter([_Chunk(tool_calls=_tc())])
             return _Iter([_Chunk(content="知道了")])
 
@@ -395,7 +401,20 @@ def test_overreach_announcement_wakes_agent_b(monkeypatch):
 
         gen = responder.run_turn("agent_x", responder.load_identity("agent_x") if False else {
             "id": "c", "label": "受限卡", "persona": "", "responsibilities": [],
-            "tools_allow": ["fs.read"]}, "hi", bus_registry=FakeRegistry, room_id="default")
+            "tools_allow": []}, "hi", bus_registry=FakeRegistry, room_id="default")
+        # 幻觉调用核心权限 shell.run（未勾选）→ 越权拦截 + B 通报（v0.9.1 核心权限语义）
+        # 重定义 mock：第一轮工具调用改为 shell.run
+        def _tc2():
+            fn = type("F", (), {"name": "shell.run", "arguments": _json.dumps({"command": "echo x"})})
+            return [type("TC", (), {"index": 0, "id": "c1", "function": fn()})()]
+        _Completions.calls["n"] = 0
+        async def _create2(self, *a, **kw):
+            _Completions.calls["n"] += 1
+            if _Completions.calls["n"] == 1:
+                return _Iter([_Chunk(tool_calls=_tc2())])
+            return _Iter([_Chunk(content="知道了")])
+        _Completions.create = _create2
+
         kinds = [k async for k, _ in gen]
         assert "tool" in kinds
         await asyncio.sleep(2.5)  # 让 B 的通报回应跑完（占位 0.35s/片）
@@ -434,9 +453,9 @@ def test_capability_tools(tmp_path, monkeypatch):
         r = _json.loads(await exec_fs_tool("default", "t", "browser.open",
                                            {"url": "ftp://x"}))
         assert not r["ok"]
-        # 白名单独立
+        # v0.9.1：勾选 shell.run 后可拿到定义（默认集之外的核心权限）
         tools = filter_tools(["shell.run"])
-        assert {tl["function"]["name"] for tl in tools} == {"shell.run"}
+        assert "shell.run" in {tl["function"]["name"] for tl in tools}
 
     asyncio.run(_run())
 

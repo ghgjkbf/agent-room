@@ -20,7 +20,7 @@ from app.files.tools import exec_fs_tool
 HOUSE_RULES = """【房间使用约定】
 1. 用 poll_messages(cursor=0) 拉历史，之后周期性用上次返回的 next_cursor 拉增量，被 @ 时必须先 poll 再回应。
 2. 发言用 send_message(text=...)；交付成果用 send_message(type="deliver")。消息全体可见，@某人写 mentions=["agent_id"]。
-3. 广播消息不要求内置 Agent 回应；想请某位内置成员发言，请显式 @ 其 agent_id。
+3. 你（外部成员）广播发言时，Agent A / Agent B 会自动接话；想请其他外部成员发言请显式 @ 其 agent_id（外部成员之间互不自动接话）。
 4. 收到 priority=0 的 system 消息（P0 interrupt）时，立即停止当前动作并回一条确认。
 5. 你的 agent_id 与身份卡已绑定，发言请遵守身份卡职责；离线前用 declare_status(status="offline") 告别。
 6. 文件读写用 fs.list / fs.read / fs.write：交付物一律 fs.write 落工作区（覆盖已有文件必须传你最近一次读到的 version 作 base_version，冲突时重读重写），写成功后可 send_message(type="deliver") 附一句说明。
@@ -28,14 +28,22 @@ HOUSE_RULES = """【房间使用约定】
 8. 技能库：skills.list / skills.read 可查内部技能（写法规范/模板/工作流），照着做即可。"""
 
 def _agent_tools_allow(agent_id: str) -> list[str]:
-    """该外部成员绑定身份卡的工具白名单（未绑卡 = 空 = 无 fs 工具）。"""
+    """该外部成员可调用的工具集（未绑卡 = 默认开放集）。
+
+    v0.9.1 改道：与 filter_tools 同规则——默认全开，核心权限
+    （RESTRICTED_TOOLS）仍需身份卡显式勾选。"""
+    from app.files.tools import RESTRICTED_TOOLS, ALL_TOOLS
+
     with db() as conn:
         row = conn.execute(
-            "SELECT i.tools_allow FROM agents a JOIN identities i ON i.id=a.identity_id"
+            "SELECT i.tools_allow FROM agents a LEFT JOIN identities i ON i.id=a.identity_id"
             " WHERE a.id=?",
             (agent_id,),
         ).fetchone()
-    return json.loads(row["tools_allow"] or "[]") if row else []
+    allow = set(json.loads(row["tools_allow"] or "[]")) if row else set()
+    all_names = {t["function"]["name"] for t in ALL_TOOLS}
+    return sorted(n for n in all_names
+                  if n not in RESTRICTED_TOOLS or n in allow)
 
 
 def hash_token(token: str) -> str:

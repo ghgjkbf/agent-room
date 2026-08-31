@@ -127,17 +127,17 @@ def test_run_turn_tool_loop_and_deliver(monkeypatch):
 
 
 def test_tool_whitelist_blocked_in_run_turn(monkeypatch):
-    """模型幻觉出白名单外工具 → 不执行，返回结构化拒绝。"""
+    """模型幻觉出核心权限工具（未勾选 shell.run）→ 不执行，结构化拒绝。"""
     identity = {
         "id": "identity_e2e2", "label": "受限员",
         "persona": "", "responsibilities": [],
-        "tools_allow": ["fs.read"],  # 没有 fs.write
+        "tools_allow": [],  # v0.9.1：核心权限 shell.run 未勾选
     }
 
     async def _create(*a, **kw):
         class _Fn:
-            name = "fs.write"
-            arguments = json.dumps({"path": PATH, "content": "x"})
+            name = "shell.run"
+            arguments = json.dumps({"command": "echo blocked"})
 
         class _TC:
             index = 0
@@ -153,7 +153,7 @@ def test_tool_whitelist_blocked_in_run_turn(monkeypatch):
     events = []
 
     async def _run():
-        async for kind, item in run_turn("agent_y", identity, "写文件"):
+        async for kind, item in run_turn("agent_y", identity, "跑个命令"):
             events.append((kind, item))
 
     import asyncio
@@ -162,6 +162,5 @@ def test_tool_whitelist_blocked_in_run_turn(monkeypatch):
     result = json.loads(tool_ev[1]["result"])
     assert result["ok"] is False
     assert "白名单" in result["error"]
-    # 文件不应存在（未执行）
-    with pytest.raises(Exception):
-        workspace.read_file(ROOM, PATH)
+    # shell.run 不可能被真的执行（未勾选即拒绝）
+    assert "blocked" not in result["error"]
