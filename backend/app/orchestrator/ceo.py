@@ -322,6 +322,8 @@ class Orchestrator:
                 messages=[{"role": "system", "content": system}] + (
                     [{"role": "user", "content": user}] if user else []),
                 temperature=0.2)
+            if not r.choices:
+                return None
             content = (r.choices[0].message.content or "").strip()
             for fence in ("```json", "```"):
                 if content.startswith(fence):

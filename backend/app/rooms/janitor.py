@@ -42,9 +42,10 @@ async def _summarize(blob: str, n: int) -> str:
                     {"role": "user", "content": blob[:4000]},
                 ],
                 temperature=0.3)
-            text = (r.choices[0].message.content or "").strip()
-            if text:
-                return text
+            if r.choices:
+                text = (r.choices[0].message.content or "").strip()
+                if text:
+                    return text
         except Exception:
             pass
     head = blob[:100].replace("\n", " ")
@@ -64,6 +65,9 @@ async def run_janitor_once(room_id: str = "default", bus_registry=None,
             (room_id, last),
         ).fetchall()
     if not force and len(rows) < settings.janitor_min_msgs:
+        return {"archived": 0}
+    if not rows:
+        # 空归档（上次归档后无新 chat，或被重复 force）：直接返回 0，不写摘要不推游标
         return {"archived": 0}
 
     cursor = rows[-1]["id"]

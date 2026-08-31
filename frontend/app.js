@@ -1133,6 +1133,12 @@ $('btn-archive-now').addEventListener('click', async () => {
   })).json();
   alertSys(i18t('归档完成：') + `${r.archived || 0} ${i18t('条')}`);
   refreshMemory();
+  if (r.archived > 0) {
+    // 原文已物理删除：清空本地消息流并按最新历史重放（否则旧气泡仍显示，看起来"没清掉"）
+    $('feed').innerHTML = '';
+    finalizeStreaming();
+    await loadRoomView();
+  }
 });
 
 /* ---------- 常用指令条（composer 上方 chips） ----------
