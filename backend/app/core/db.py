@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS messages (
   mentions TEXT DEFAULT '[]',
   parent_task_id TEXT,
   invalidated INTEGER DEFAULT 0,
+  starred INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_messages_room ON messages(room_id, id);
@@ -133,6 +134,8 @@ def _migrate_messages(conn):
         conn.execute("ALTER TABLE messages ADD COLUMN is_final INTEGER NOT NULL DEFAULT 1")
     if "full_text" not in cols:
         conn.execute("ALTER TABLE messages ADD COLUMN full_text TEXT")
+    if "starred" not in cols:
+        conn.execute("ALTER TABLE messages ADD COLUMN starred INTEGER NOT NULL DEFAULT 0")
     # 旧数据回填：历史上每个分片都是独立消息且 is_final=1，补全 full_text 即可回放原文
     conn.execute(
         "UPDATE messages SET full_text = payload_text"

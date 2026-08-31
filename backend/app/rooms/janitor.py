@@ -77,8 +77,10 @@ async def run_janitor_once(room_id: str = "default", bus_registry=None,
         {"id": f"janitor_{cursor}", "kind": "chat_digest"}, ts)
 
     with db() as conn:
-        conn.execute("DELETE FROM messages WHERE room_id=? AND type='chat' AND id<=?",
-                     (room_id, cursor))
+        # 星标消息豁免归档（星标 = 用户要长期回看的正文）
+        conn.execute(
+            "DELETE FROM messages WHERE room_id=? AND type='chat' AND id<=? AND starred=0",
+            (room_id, cursor))
         conn.execute(
             "INSERT INTO kv (k, v) VALUES (?,?)"
             " ON CONFLICT(k) DO UPDATE SET v=excluded.v",

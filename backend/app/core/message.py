@@ -28,6 +28,7 @@ class Message:
         seq: Optional[int] = None,
         stream_seq: int = 0,
         is_final: bool = True,
+        starred: int = 0,
     ):
         self.msg_id = msg_id or str(uuid.uuid4())
         self.schema_version = "1.0"
@@ -44,6 +45,8 @@ class Message:
         # 流式分片标记：stream_seq>0 表示片段；is_final=False 后续还有片段
         self.stream_seq = stream_seq
         self.is_final = is_final
+        # 星标（UI 标注）：0/1，仅前端展示语义，不影响编排与网关
+        self.starred = starred
 
     @classmethod
     def from_row(cls, row) -> "Message":
@@ -62,6 +65,7 @@ class Message:
             created_at=row["created_at"],
             seq=row["id"],
             is_final=True,
+            starred=row["starred"] or 0,
         )
 
     def to_dict(self) -> dict:
@@ -79,4 +83,5 @@ class Message:
             "created_at": self.created_at,
             "stream_seq": self.stream_seq,
             "is_final": self.is_final,
+            "starred": self.starred,
         }

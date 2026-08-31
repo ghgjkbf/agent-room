@@ -24,11 +24,12 @@ from app.mcp_gateway.server import mount_gateway
 from app.orchestrator import routes as task_routes
 from app.orchestrator.ceo import OrchestratorRegistry
 from app.rooms import routes as room_routes
+from app.rooms import message_routes
 from app.rooms.bus import BusRegistry
 from app.rooms.janitor import janitor_loop
 from app.skills import routes as skill_routes
 
-app = FastAPI(title="agent-room", version="0.8.0")
+app = FastAPI(title="agent-room", version="0.9.0")
 
 
 @asynccontextmanager
@@ -46,6 +47,7 @@ app.include_router(file_routes.router)
 app.include_router(task_routes.router)
 app.include_router(memory_routes.router)
 app.include_router(room_routes.router)
+app.include_router(message_routes.router)
 app.include_router(skill_routes.router)
 mount_gateway(app, BusRegistry)  # 包装上面的 lifespan，追加 MCP session_manager
 
