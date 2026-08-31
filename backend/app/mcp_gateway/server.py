@@ -361,6 +361,21 @@ def build_mcp_server(bus_registry) -> MCPServer:
                 await _warn_violation(bus_registry, room_id, agent_id, "memory.query")
             return _err(e)
 
+    @srv.tool()
+    async def chat_delete(agent_id: str, token: str, seqs: list[int],
+                          room_id: str = "default") -> str:
+        """按界面序号定向删除消息（软删，立即对全群不可见）。seqs 即气泡 #n 编号列表。"""
+        try:
+            g = _fs_guard(agent_id, token, "chat.delete")
+            _ = g
+            _require_member(agent_id, room_id)
+            return await exec_fs_tool(room_id, agent_id, "chat.delete",
+                                      {"seqs": seqs})
+        except Exception as e:
+            if isinstance(e, PermissionError):
+                await _warn_violation(bus_registry, room_id, agent_id, "chat.delete")
+            return _err(e)
+
     return srv
 
 

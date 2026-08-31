@@ -173,7 +173,7 @@ CAP_TOOLS = [
     },
 ]
 
-# ---- chat.archive 工具（群管家主动触发归档清理） ----
+# ---- chat.archive / chat.delete 工具（群管家治理） ----
 
 CHAT_TOOLS = [
     {
@@ -183,6 +183,25 @@ CHAT_TOOLS = [
             "description": "立即归档清理当前群聊：把自上次归档以来的聊天总结为摘要"
                            "（写入公共记忆）并清理原文。群管家的本职工具。",
             "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "chat.delete",
+            "description": "按消息序号定向删除消息（软删：对界面与历史立即不可见，库内留痕）。"
+                           "序号即界面上气泡的 #n 编号；可一次传多个序号批量删除。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "seqs": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "要删除的消息序号列表（界面 #n 编号），如 [3, 17, 25]",
+                    },
+                },
+                "required": ["seqs"],
+            },
         },
     },
 ]
@@ -358,6 +377,34 @@ async def exec_fs_tool(room_id: str, author: str, name: str, args: dict,
 
         r = await run_janitor_once(room_id, bus_registry, force=True)
         return json.dumps({"ok": True, **r}, ensure_ascii=False)
+    if name == "chat.delete":
+        # 定向软删：序号 = 历史（invalidated=0）流中的位置，与界面 #n 一一对应
+        seqs = [int(s) for s in (args.get("seqs") or []) if str(s).strip().lstrip("-").isdigit()]
+        if not seqs:
+            return json.dumps({"ok": False, "error": "seqs 不能为空"}, ensure_ascii=False)
+        with db() as conn:
+            rows = conn.execute(
+                "SELECT id, msg_id FROM messages WHERE room_id=? AND invalidated=0"
+                " ORDER BY id", (room_id,)).fetchall()
+            deleted, missing = [], []
+            for s in seqs:
+                if 1 <= s <= len(rows):
+                    conn.execute("UPDATE messages SET invalidated=1 WHERE id=?",
+                                 (rows[s - 1]["id"],))
+                    deleted.append(rows[s - 1]["msg_id"])
+                else:
+                    missing.append(s)
+        if deleted and bus_registry:
+            try:
+                await bus_registry.get(room_id).publish(Message(
+                    room_id=room_id, type="system", sender_kind="agent",
+                    sender_id=author,
+                    payload_text=f"🧹 已定向删除 {len(deleted)} 条消息"
+                                 f"（序号 {', '.join(map(str, seqs))}）。"))
+            except Exception:
+                pass  # 通知失败不影响删除本身
+        return json.dumps({"ok": True, "deleted": len(deleted),
+                           "invalid_seqs": missing}, ensure_ascii=False)
     if name == "shell.run":
         return await _exec_shell(room_id, str(args.get("command", "")),
                                  int(args.get("timeout") or 30))
