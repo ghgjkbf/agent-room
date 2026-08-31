@@ -45,16 +45,27 @@ def test_authenticate_ok_and_wrong_token():
         _cleanup(aid)
 
 
-def test_plan_replies_anti_loop():
+def test_plan_replies_member_parity():
+    """成员平权：所有成员广播互通（含 A↔B）；连锁回复（is_reply）不唤起。"""
     agents = [{"id": "agent_a"}, {"id": "agent_b"}]
     # 人类广播 → 全员
     m = Message(room_id="default", type="chat", sender_kind="human", sender_id="u", payload_text="hi")
     assert [a["id"] for a in plan_replies(m, agents)] == ["agent_a", "agent_b"]
-    # 外部广播 → 无人自动接话
+    # 外部广播 → 内置成员接话（基础互聊权）
     m = Message(room_id="default", type="chat", sender_kind="agent", sender_id="agent_trae", payload_text="hi")
-    assert plan_replies(m, agents) == []
+    assert [a["id"] for a in plan_replies(m, agents)] == ["agent_a", "agent_b"]
     # 外部 @A → 仅 A
     m = Message(room_id="default", type="chat", sender_kind="agent", sender_id="agent_trae", payload_text="hi", mentions=["agent_a"])
+    assert [a["id"] for a in plan_replies(m, agents)] == ["agent_a"]
+    # 内置 A 广播 → 唤起 B（成员平权：广播互通）
+    m = Message(room_id="default", type="chat", sender_kind="agent", sender_id="agent_a", payload_text="hi")
+    assert [a["id"] for a in plan_replies(m, agents)] == ["agent_b"]
+    # 连锁回复（is_reply=True）→ 不唤起任何人（防 A↔B 客套循环）
+    m = Message(room_id="default", type="chat", sender_kind="agent", sender_id="agent_a", payload_text="hi")
+    m.is_reply = True
+    assert plan_replies(m, agents) == []
+    # 内置 B 显式 @A → A 接（定向始终生效）
+    m = Message(room_id="default", type="chat", sender_kind="agent", sender_id="agent_b", payload_text="hi", mentions=["agent_a"])
     assert [a["id"] for a in plan_replies(m, agents)] == ["agent_a"]
 
 

@@ -309,13 +309,15 @@ async def respond_agent(bus, msg: Message | None, agent: dict,
             pieces.append(piece)
             seq = len(pieces) - 1  # 0,1,2...；0 为首片
             if seq == 0:
-                # 首片：先落一条事件流条目占位（payload 空），全文等收完再补写
+                # 首片：先落一条事件流条目占位（payload 空），全文等收完再补写。
+                # is_reply=True：连锁回复不再自动唤起他人（防 A↔B 死循环，reply_dispatch 读此标记）
                 m = Message(
                     room_id=bus.room_id, type="chat",
                     sender_kind="agent", sender_id=aid,
                     payload_text="", stream_seq=0, is_final=False,
                     msg_id=reply_id,
                 )
+                m.is_reply = True
                 await bus.publish(m)
             # 实际内容统一走纯广播通道（不落库）；首片也必须发，否则开头丢失
             stream_piece = Message(
@@ -391,13 +393,18 @@ def _result_ok(result_text: str) -> bool:
 def plan_replies(msg: Message, online_agents: list[dict]) -> list[dict]:
     """根据 mentions 决定谁回复：mentions 命中的优先，否则广播全员。
 
-    防死循环规则（第 3 步）：外部 Agent 发来的消息只有显式 @ 到某内置 Agent
-    才唤起它——广播不触发自动回复，避免「客套互捧」循环（设计文档风险表 s13）。
+    成员平权（v0.9）：所有成员广播互通——agent chat 的广播唤起除发言者外的
+    全体在线成员（含 A↔B 互相接话），人人都有基础互聊权。
+    防循环护栏：同一消息链上的连锁唤起不叠加——内置成员的回复仅经
+    notify_agent_final 进入编排验收，不再二次广播唤起他人（reply 标记），
+    只允许被 @ 或排产单 dispatch 定向唤起，杜绝 A↔B 客套互捧死循环。
     """
     if msg.mentions:
         mentioned = [a for a in online_agents if a["id"] in msg.mentions]
         return mentioned
     if msg.sender_kind == "agent":
-        # 发送方是 Agent（含外部成员经网关 send_message）时不广播接话
-        return []
+        if getattr(msg, "is_reply", False):
+            # 连锁回复（内置成员接话）不再自动唤起他人，防 A↔B 死循环
+            return []
+        return [a for a in online_agents if a["id"] != msg.sender_id]
     return online_agents

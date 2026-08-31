@@ -235,6 +235,7 @@ async def _ws_loop(ws: WebSocket, bus, client_id: str):
         # 先登记生成句柄再落库广播：保证 publish 期间到达的 P0 也能 cancel
         # 第 5 步：type=task（人类下达目标）改由 CEO 编排器独占——执行者
         # 等排产单 dispatch 才动工，编排者不执行、执行者不编排
+        # 人类 chat 的回复调度仍在此内联做（reply_dispatch 只管 agent chat）
         reply_plan = []
         if mtype == "chat":
             with db() as conn:
@@ -269,6 +270,11 @@ async def room_ws(ws: WebSocket, room_id: str):
     orch = OrchestratorRegistry.get(room_id)  # CEO 编排器挂为总线监听器
     if orch.on_message not in bus.listeners:
         bus.listeners.append(orch.on_message)
+    # 成员平权：agent chat 广播的回复调度（含外部成员经网关的发言）
+    from app.agents.reply_dispatch import dispatch_replies
+
+    if dispatch_replies not in bus.listeners:
+        bus.listeners.append(dispatch_replies)
     client_id = str(uuid.uuid4())
     await bus.join(client_id, ws)
     try:

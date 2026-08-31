@@ -47,6 +47,9 @@ class Message:
         self.is_final = is_final
         # 星标（UI 标注）：0/1，仅前端展示语义，不影响编排与网关
         self.starred = starred
+        # 连锁回复标记：内置成员接话产生的消息不再自动唤起他人（防 A↔B 死循环）；
+        # 仅内存传递，不落库不进协议
+        self.is_reply = False
 
     @classmethod
     def from_row(cls, row) -> "Message":
