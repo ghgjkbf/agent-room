@@ -15,3 +15,6 @@ backend/data/
 .DS_Store
 Thumbs.db
 *.log
+docs/backup-frontend-v0.8/
+docs/frontend-redesign-handoff.md
+docs/frontend-redesign-memory.md

@@ -36,11 +36,14 @@ async def write_skill(body: SkillIn):
         raise HTTPException(400, str(e))
 
 
-# 本机技能源（ZCode / TRAE 的技能库；导入 = 复制其 SKILL.md 为内部技能）
+# 本机技能源（可选环境变量覆盖；导入 = 复制其 SKILL.md 为内部技能）。
+# 默认关闭——发布版不预设任何开发者本机路径，用户经 env 或前端传本机绝对路径按需启用。
+import os as _os
+
 BUILTIN_SOURCES = {
-    "zcode": r"D:\ai-use\.zcode\skills",
-    "trae": r"C:\Users\Administrator\.trae-cn\skills",
-    "trae-builtin": r"C:\Users\Administrator\.trae-cn\builtin_skills",
+    "zcode": _os.environ.get("AGENT_ROOM_SKILLS_ZCODE", ""),
+    "trae": _os.environ.get("AGENT_ROOM_SKILLS_TRAE", ""),
+    "trae-builtin": _os.environ.get("AGENT_ROOM_SKILLS_TRAE_BUILTIN", ""),
 }
 
 
