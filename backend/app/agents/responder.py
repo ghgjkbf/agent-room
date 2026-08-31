@@ -31,9 +31,11 @@ MAX_TOOL_ROUNDS = 8
 # 内置双 Agent 的默认职责（专属 md 缺失时的兜底；完整规范见 backend/agent_md/*.md）
 DEFAULT_ROLES = {
     "agent_a": ("Agent A·用户服务助手：服务人类用户——答疑解惑、辅助用户生成提示词、"
-                "提供指导意见、协助调度与安排任务、监督其他 Agent 的进展。"),
-    "agent_b": ("Agent B·群聊管家：服务群聊本身——定期总结归档聊天记录、监督群聊"
-                "定时清理、维护上下文连贯与秩序、监管成员行为防止越权。"),
+                "提供指导意见、协助调度与安排任务、监督其他 Agent 的进展；"
+                "受用户委托时代行成员身份卡换绑（权限代理）。"),
+    "agent_b": ("Agent B·群聊管家（兼 CEO 编排）：服务群聊本身——定期总结归档聊天记录、"
+                "监督群聊定时清理、维护上下文连贯与秩序、监管成员行为防止越权；"
+                "并承担任务编排闭环（拆解/派发/验收/汇总）。"),
 }
 
 async def announce_overreach(bus_registry, room_id: str, agent_id: str, tool: str):

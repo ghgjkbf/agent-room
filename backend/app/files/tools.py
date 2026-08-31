@@ -173,6 +173,45 @@ CAP_TOOLS = [
     },
 ]
 
+# ---- admin 权限工具（Agent A · 用户服务助手的授权职能） ----
+
+ADMIN_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "admin.list_members",
+            "description": "列出群内全部成员及其身份卡绑定状态（agent_id / 名字 / "
+                           "身份卡标签或未绑定），授权决策前先查现状。",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "admin.list_identities",
+            "description": "列出全部可用身份卡（id / 标签 / 职责 / 工具白名单），"
+                           "供选择换绑目标用。",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "admin.bind_identity",
+            "description": "为某个成员换绑身份卡（即刻生效：工具白名单与职责随卡变更）。"
+                           "用户授权你分配权限时使用；identity_id 传空串则解绑。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "agent_id": {"type": "string", "description": "成员 id（如 agent_b 或外部成员 id）"},
+                    "identity_id": {"type": "string", "description": "身份卡 id（解绑传空串）"},
+                },
+                "required": ["agent_id", "identity_id"],
+            },
+        },
+    },
+]
+
 # ---- chat.archive / chat.delete 工具（群管家治理） ----
 
 CHAT_TOOLS = [
@@ -206,7 +245,7 @@ CHAT_TOOLS = [
     },
 ]
 
-ALL_TOOLS = FS_TOOLS + SKILL_TOOLS + MEMORY_TOOLS + CAP_TOOLS + CHAT_TOOLS
+ALL_TOOLS = FS_TOOLS + SKILL_TOOLS + MEMORY_TOOLS + CAP_TOOLS + CHAT_TOOLS + ADMIN_TOOLS
 
 
 def filter_tools(tools_allow: list[str] | None) -> list[dict]:
@@ -405,6 +444,63 @@ async def exec_fs_tool(room_id: str, author: str, name: str, args: dict,
                 pass  # 通知失败不影响删除本身
         return json.dumps({"ok": True, "deleted": len(deleted),
                            "invalid_seqs": missing}, ensure_ascii=False)
+    if name == "admin.list_members":
+        with db() as conn:
+            rows = conn.execute(
+                "SELECT a.id, a.name, a.kind, i.label AS identity_label, i.id AS card_id"
+                " FROM room_members m JOIN agents a ON a.id = m.agent_id"
+                " LEFT JOIN identities i ON i.id = a.identity_id"
+                " WHERE m.room_id=? ORDER BY a.id", (room_id,)).fetchall()
+        return json.dumps({"ok": True, "members": [
+            {"agent_id": r["id"], "name": r["name"], "kind": r["kind"] or "internal",
+             "identity_id": r["card_id"],
+             "identity_label": r["identity_label"] or "未绑定"} for r in rows
+        ]}, ensure_ascii=False)
+    if name == "admin.list_identities":
+        with db() as conn:
+            rows = conn.execute(
+                "SELECT id, label, responsibilities, tools_allow FROM identities"
+                " ORDER BY id").fetchall()
+        return json.dumps({"ok": True, "identities": [
+            {"identity_id": r["id"], "label": r["label"],
+             "responsibilities": json.loads(r["responsibilities"] or "[]"),
+             "tools_allow": json.loads(r["tools_allow"] or "[]")} for r in rows
+        ]}, ensure_ascii=False)
+    if name == "admin.bind_identity":
+        target = str(args.get("agent_id", ""))
+        card = str(args.get("identity_id", "") or "")
+        with db() as conn:
+            agent = conn.execute("SELECT id, name FROM agents WHERE id=?",
+                                 (target,)).fetchone()
+            if not agent:
+                return json.dumps({"ok": False, "error": f"成员不存在：{target}"},
+                                  ensure_ascii=False)
+            if card:
+                if not conn.execute("SELECT id FROM identities WHERE id=?",
+                                    (card,)).fetchone():
+                    return json.dumps({"ok": False, "error": f"身份卡不存在：{card}"},
+                                      ensure_ascii=False)
+                conn.execute("UPDATE agents SET identity_id=?, chat_turns=0 WHERE id=?",
+                             (card, target))
+            else:
+                conn.execute("UPDATE agents SET identity_id=NULL, chat_turns=0 WHERE id=?",
+                             (target,))
+            label_row = conn.execute(
+                "SELECT i.label FROM agents a LEFT JOIN identities i ON i.id=a.identity_id"
+                " WHERE a.id=?", (target,)).fetchone()
+        if bus_registry:
+            try:
+                await bus_registry.get(room_id).publish(Message(
+                    room_id=room_id, type="system", sender_kind="agent",
+                    sender_id=author,
+                    payload_text=f"🔑 权限调整：{agent['name']} 绑定身份卡 → "
+                                 f"{label_row['label'] if label_row and label_row['label'] else '未绑定'}"
+                                 f"（由 Agent A 执行）。"))
+            except Exception:
+                pass
+        return json.dumps({"ok": True, "agent": agent["name"],
+                           "identity_label": label_row["label"] if label_row and label_row["label"] else "未绑定"},
+                          ensure_ascii=False)
     if name == "shell.run":
         return await _exec_shell(room_id, str(args.get("command", "")),
                                  int(args.get("timeout") or 30))

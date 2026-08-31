@@ -9,6 +9,8 @@
 - **消息星标**：hover ☆/★ 切换，标过的琥珀描边 + 角标；落库 messages.starred；**星标消息豁免归档**（正文永久保留）；乐观切换失败自动回滚
 - **单条消息软删**：hover ✕ 删除，复用 P0 的 invalidated=1 机制——对界面与 Agent 网关立即隐身，库内留审计痕迹；编号自动补位
 - **chat.delete 治理工具**（Agent 侧定向删除）：内置 Agent function calling 与 MCP 网关（chat_delete）双暴露，按界面 #n 序号批量软删（seqs 参数），群管家 B 出厂白名单默认含；删除后向群里发系统回执
+- **权限代理（Agent A 授权职能）**：admin.list_members / admin.list_identities / admin.bind_identity 三工具，用户委托时代行成员身份卡换绑（查询 → 一句建议 → 确认 → 执行 → 群内通报 🔑）；行为红线：用户未授权不主动动权限
+- **CEO 合并入 B**：Agent B 升格「群聊管家（兼 CEO 编排）」——编排闭环（拆解/派发/验收/汇总）由系统事件驱动自动进行，署名仍为「CEO 编排」（编排者身份）；B 手册、兜底职责描述同步更新；编排器不执行、执行者不编排的黄金法则不变
 - **稳定性**：修复气泡点击塌缩（波纹 .fx 的 overflow:hidden 使 flex 子项 min-height 归零，被长消息流挤压成一条；加 flex-shrink:0 根治）；按用户决策移除长气泡折叠功能
 - 验收：pytest 54 例全过；浏览器逐面板走查（en 无中文残留 / 编号连续性 / 删除重排 / 星标持久化 / 跳转闪烁 / 双语往返）全绿
 
