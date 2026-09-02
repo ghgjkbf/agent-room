@@ -135,12 +135,19 @@ backend/          FastAPI sidecar
   app/skills/      内部技能库（store.py md 存储 / routes.py API + skills.* 工具）
   agent_md/        内置 Agent 专属行为规范（agent_a.md / agent_b.md，注入 system prompt）
   skills/          技能文档（*.md，前端「技能」面板与 skills.* 工具共用）
-  tests/           pytest（网关 / 文件工作区 / 工具循环 / 编排 / 记忆）
 frontend/         单页前端（原生 HTML/CSS/JS，微信式三栏布局）
-src-tauri/        Tauri 2 壳（Rust 只管窗口与 sidecar 生命周期）
-scripts/          launch-agent-room.vbs 桌面快捷方式启动器
+src-tauri/        Tauri 2 壳（Rust 只管窗口与 sidecar 生命周期；NSIS 安装包 + 嵌入式 Python 运行时）
+scripts/          launch-agent-room.vbs 桌面快捷方式启动器 / prepare-tauri-resources.py 打包资源准备
 docs/             设计文档与交接文档
 ```
+
+### v0.9.2 桌面安装包（Tauri + NSIS）
+
+- **测试文件清除**：移除 backend/tests/ 全部 pytest 用例（7 文件，54 例）及 README 测试章节——测试依赖未入生产 requirements，安装包场景无意义；如需回归可从 git 历史取回
+- **NSIS 安装配置**（tauri.conf.json）：installMode=currentUser 免管理员；createDesktopShortcut=always + StartMenu 快捷方式——安装完成即有 "Agent Room" 桌面快捷方式；简中/英文双语安装界面
+- **打包资源管线**：scripts/prepare-tauri-resources.py 幂等组装 src-tauri/resources/（backend 剔除 .venv/缓存/数据库 → frontend 同级复制 → 下载 Python 3.14.6 embeddable → pip 生产依赖装入 site-packages），产物 gitignore 不入库
+- **Tauri 资源映射**：bundle.resources 将 backend/frontend/runtime 装入安装目录；窗口 url 指向 127.0.0.1:8899（sidecar 同端口托管前端）
+- **元数据补全**：package.json 0.9.2 / Cargo.toml 0.9.2（description/authors/license/repository）/ tauri.conf 版本对齐
 
 ## API 清单
 

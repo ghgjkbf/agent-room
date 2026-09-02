@@ -1,7 +1,7 @@
 {
   "name": "agent-room",
-  "version": "1.0.0",
-  "description": "",
+  "version": "0.9.2",
+  "description": "Agent Room · 多Agent群聊协作",
   "main": "index.js",
   "scripts": {
     "dev:backend": "cd backend && .venv\\Scripts\\python.exe main.py",

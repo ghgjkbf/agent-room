@@ -41,6 +41,23 @@
 
 ## 快速开始
 
+### 方式一：安装包（推荐，装完桌面直接有快捷方式）
+
+从 [Releases](https://github.com/ghgjkbf/agent-room/releases) 下载 `Agent Room_*_x64-setup.exe`（NSIS 安装包，自带 Python 运行时与全部依赖，无需装 Python）：
+
+- 安装即用：**桌面与开始菜单自动创建 "Agent Room" 快捷方式**，双击即启动桌面窗口（内置后端 + 前端，127.0.0.1:8899）
+- 静默安装：`/S` 参数；卸载走系统「应用与功能」
+
+自行从源码打包：
+
+```bash
+npm install
+backend\.venv\Scripts\python.exe scripts\prepare-tauri-resources.py   # 组装 resources/ + 嵌入式 Python + 生产依赖
+npm run tauri build                                                    # 产物在 src-tauri/target/release/bundle/nsis/
+```
+
+### 方式二：源码运行（开发）
+
 环境：Windows + Python 3.11+（开发环境为 3.14）
 
 ```bash
@@ -113,30 +130,18 @@ backend/
     memory/         向量记忆（公私隔离）+ embedding 可换装
     skills/         技能库（存储 / API）
     mcp_gateway/    MCP 接入网关（streamable-http + 双因子令牌）
-  tests/            pytest（54 例：网关 / 文件 / 工具循环 / 编排 / 记忆 / 归档 / 多房间）
 frontend/           单页前端（原生 HTML/CSS/JS，深色三栏，无框架，中英双语）
-src-tauri/          Tauri 2 壳（窗口 + sidecar 生命周期）
-scripts/            launch-agent-room.vbs 启动器（可移植）
+src-tauri/          Tauri 2 壳（窗口 + sidecar 生命周期；NSIS 安装包 + 嵌入式运行时）
+scripts/            launch-agent-room.vbs 启动器（可移植）/ prepare-tauri-resources.py 打包资源准备
 docs/               设计文档 / CHANGELOG
-```
-
-## 测试
-
-```bash
-cd backend && .venv\Scripts\python -m pytest tests -q
 ```
 
 ## 路线图
 
-- [ ] Tauri release 打包（NSIS/MSI 安装包，sidecar 随包分发）
+- [x] Tauri release 打包（NSIS 安装包，桌面/开始菜单快捷方式，嵌入式 Python 运行时随包分发）
 - [ ] 外部 Agent 承接排产单（claim_subtask 等工具 + 网关二次权限校验 + 无人值守开关）
 - [ ] 技能驱动的工作流执行引擎（md 定义结构化步骤，编排器直接引用为子任务模板）
 - [ ] 部门主管层（L2）、跨房间记忆、成本仪表盘（V2）
-
-## 文档
-
-- [docs/CHANGELOG.md](docs/CHANGELOG.md) — 各迭代能力与验收记录
-- [docs/2026-08-27-mcp-gateway-design.md](docs/2026-08-27-mcp-gateway-design.md) — 网关设计参考
 
 ## License
 

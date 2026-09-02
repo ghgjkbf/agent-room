@@ -41,6 +41,23 @@ Built as described in the [multi-agent collaboration system design doc](docs/age
 
 ## Quick Start
 
+### Option 1: installer (recommended — desktop shortcut out of the box)
+
+Download `Agent Room_*_x64-setup.exe` from [Releases](https://github.com/ghgjkbf/agent-room/releases) (NSIS installer; ships an embedded Python runtime and all dependencies — no Python install needed):
+
+- Install and go: **"Agent Room" shortcuts are created on the desktop and Start Menu automatically**; double-click to launch the desktop window (bundled backend + frontend on 127.0.0.1:8899)
+- Silent install: `/S`; uninstall via "Apps & features"
+
+Build from source yourself:
+
+```bash
+npm install
+backend\.venv\Scripts\python.exe scripts\prepare-tauri-resources.py   # assemble resources/ + embedded Python + prod deps
+npm run tauri build                                                    # output: src-tauri/target/release/bundle/nsis/
+```
+
+### Option 2: run from source (development)
+
 Requirements: Windows + Python 3.11+ (developed on 3.14)
 
 ```bash
@@ -113,22 +130,15 @@ backend/
     memory/         Vector memory (public/private isolation) + swappable embeddings
     skills/         Skill library (storage / APIs)
     mcp_gateway/    MCP gateway (streamable-http + two-factor tokens)
-  tests/            pytest (54 cases: gateway / files / tool loop / orchestration / memory / archiving / rooms)
 frontend/            Single-page frontend (vanilla HTML/CSS/JS, dark three-column, no framework, zh/en)
-src-tauri/          Tauri 2 shell (window + sidecar lifecycle)
-scripts/            launch-agent-room.vbs launcher (portable)
+src-tauri/          Tauri 2 shell (window + sidecar lifecycle; NSIS installer + embedded runtime)
+scripts/            launch-agent-room.vbs launcher (portable) / prepare-tauri-resources.py packaging prep
 docs/               Design docs / CHANGELOG
-```
-
-## Tests
-
-```bash
-cd backend && .venv\Scripts\python -m pytest tests -q
 ```
 
 ## Roadmap
 
-- [ ] Tauri release packaging (NSIS/MSI installer, sidecar bundled)
+- [x] Tauri release packaging (NSIS installer, desktop/Start Menu shortcuts, embedded Python runtime bundled)
 - [ ] External agents claiming work orders (claim_subtask etc. + gateway second-layer permission checks + unattended mode)
 - [ ] Skill-driven workflow engine (md-defined structured steps, referenced by the orchestrator as subtask templates)
 - [ ] Department-lead layer (L2), cross-room memory, cost dashboard (V2)
